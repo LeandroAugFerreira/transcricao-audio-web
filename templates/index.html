@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Transcrição em Texto</title>
+
+    <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}"
+    >
+</head>
+
+<body>
+
+    <main>
+
+        <h1>Transcrição em Texto</h1>
+
+        <p>
+            Transforme arquivos de áudio e vídeo em texto.
+        </p>
+
+        <form>
+
+            <label for="arquivos">
+                Selecione os arquivos para transcrição:
+            </label>
+
+            <br><br>
+
+            <input
+                type="file"
+                id="arquivos"
+                name="arquivos"
+                accept=".mp3,.mp4,.wav,.m4a"
+                multiple
+            >
+
+            <br><br>
+
+            <button type="button">
+                Iniciar Transcrição
+            </button>
+
+        </form>
+
+    </main>
+
+</body>
+
+</html>
