@@ -1,0 +1,13 @@
+# ============================================================
+# TRANSCRIÇÃO EM TEXTO - v1.0.0
+# ============================================================
+# Ambiente utilizado no desenvolvimento: Python 3.13
+#
+# Dependência externa obrigatória:
+# FFmpeg instalado e disponível no PATH do sistema.
+# ============================================================
+
+Flask==3.1.0
+openai-whisper==20250625
+torch==2.11.0
+python-docx==1.1.2

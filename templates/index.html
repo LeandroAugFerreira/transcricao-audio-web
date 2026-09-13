@@ -1,55 +1,352 @@
 <!DOCTYPE html>
-
 <html lang="pt-BR">
 
 <head>
+
     <meta charset="UTF-8">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <title>Transcrição em Texto</title>
+    <title>
+        Transcrição em Texto
+    </title>
 
     <link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='css/style.css') }}"
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
     >
+
 </head>
 
 <body>
 
-    <main>
+    <main class="pagina">
 
-        <h1>Transcrição em Texto</h1>
+        <section class="aplicacao">
 
-        <p>
-            Transforme arquivos de áudio e vídeo em texto.
-        </p>
+            <!-- ================================================= -->
+            <!-- CABEÇALHO -->
+            <!-- ================================================= -->
 
-        <form>
+            <header class="cabecalho-principal">
 
-            <label for="arquivos">
-                Selecione os arquivos para transcrição:
-            </label>
+                <div class="marca">
 
-            <br><br>
+                    <div class="marca-icone">
+                        🎙️
+                    </div>
 
-            <input
-                type="file"
-                id="arquivos"
-                name="arquivos"
-                accept=".mp3,.mp4,.wav,.m4a"
-                multiple
+                    <div>
+
+                        <h1>
+                            Transcrição em Texto
+                        </h1>
+
+                        <p>
+                            Transforme seus arquivos de áudio e vídeo em texto utilizando Whisper.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </header>
+
+
+            <!-- ================================================= -->
+            <!-- UPLOAD -->
+            <!-- ================================================= -->
+
+            <section class="upload-area">
+
+                <div class="upload-icon">
+                    ↑
+                </div>
+
+                <h2>
+                    Adicione seus arquivos
+                </h2>
+
+                <p class="upload-descricao">
+                    Selecione arquivos individuais, uma pasta completa ou arraste arquivos para esta área.
+                </p>
+
+                <p class="upload-descricao">
+                    Formatos aceitos: MP3, MP4, WAV e M4A
+                </p>
+
+
+                <div class="acoes-selecao">
+
+                    <label
+                        for="arquivos"
+                        class="botao-arquivo"
+                    >
+                        Escolher arquivos
+                    </label>
+
+                    <input
+                        type="file"
+                        id="arquivos"
+                        accept=".mp3,.mp4,.wav,.m4a"
+                        multiple
+                        hidden
+                    >
+
+
+                    <label
+                        for="pasta-arquivos"
+                        class="botao-arquivo"
+                    >
+                        Escolher pasta
+                    </label>
+
+                    <input
+                        type="file"
+                        id="pasta-arquivos"
+                        accept=".mp3,.mp4,.wav,.m4a"
+                        webkitdirectory
+                        directory
+                        multiple
+                        hidden
+                    >
+
+
+                    <button
+                        type="button"
+                        id="botao-limpar"
+                        class="botao-limpar"
+                        disabled
+                    >
+                        Limpar lista
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <!-- ================================================= -->
+            <!-- PROGRESSO -->
+            <!-- ================================================= -->
+
+            <section
+                id="painel-progresso"
+                class="painel-progresso"
             >
 
-            <br><br>
+                <div class="progresso-superior">
 
-            <button type="button">
-                Iniciar Transcrição
-            </button>
+                    <div>
 
-        </form>
+                        <span class="progresso-rotulo">
+                            PROGRESSO DA FILA
+                        </span>
+
+                        <strong
+                            id="progresso-texto"
+                            class="progresso-texto"
+                        >
+                            Aguardando início
+                        </strong>
+
+                    </div>
+
+
+                    <span
+                        id="progresso-contador"
+                        class="progresso-contador"
+                    >
+                        0 de 0
+                    </span>
+
+                </div>
+
+
+                <div class="barra-progresso">
+
+                    <div
+                        id="barra-progresso-preenchimento"
+                        class="barra-progresso-preenchimento"
+                    ></div>
+
+                </div>
+
+
+                <div class="progresso-arquivo">
+
+                    <div class="progresso-arquivo-info">
+
+                        <span class="progresso-arquivo-label">
+                            ARQUIVO ATUAL
+                        </span>
+
+                        <strong id="arquivo-atual">
+                            Nenhum arquivo em processamento
+                        </strong>
+
+                    </div>
+
+
+                    <strong
+                        id="cronometro-atual"
+                        class="progresso-tempo"
+                    >
+                        00:00
+                    </strong>
+
+                </div>
+
+            </section>
+
+
+            <!-- ================================================= -->
+            <!-- FILA -->
+            <!-- ================================================= -->
+
+            <section class="secao-fila">
+
+                <div class="secao-fila-titulo">
+
+                    <div>
+
+                        <span class="fila-rotulo">
+                            FILA DE PROCESSAMENTO
+                        </span>
+
+                        <h2>
+                            Arquivos selecionados
+                        </h2>
+
+                    </div>
+
+
+                    <span
+                        id="quantidade-fila"
+                        class="quantidade-fila"
+                    >
+                        0 arquivos
+                    </span>
+
+                </div>
+
+
+                <!-- ================================================= -->
+                <!-- CABEÇALHO DA LISTA -->
+                <!-- ================================================= -->
+
+                <div
+                    id="cabecalho-arquivos"
+                    class="cabecalho-arquivos"
+                >
+
+                    <span>
+                        NOME
+                    </span>
+
+                    <span>
+                        TAMANHO
+                    </span>
+
+                    <span>
+                        STATUS
+                    </span>
+
+                    <span>
+                        TEMPO
+                    </span>
+
+                    <span>
+                        AÇÃO
+                    </span>
+
+                </div>
+
+
+                <!-- ================================================= -->
+                <!-- ARQUIVOS -->
+                <!-- ================================================= -->
+
+                <div id="lista-arquivos"></div>
+
+
+                <!-- ================================================= -->
+                <!-- CONTROLES -->
+                <!-- ================================================= -->
+
+                <div class="barra-controles">
+
+                    <div class="barra-controles-info">
+
+                        <span class="barra-controles-label">
+                            ESTADO
+                        </span>
+
+                        <strong id="estado-fila">
+                            Aguardando arquivos
+                        </strong>
+
+                    </div>
+
+
+                    <div class="barra-controles-botoes">
+
+                        <button
+                            type="button"
+                            id="botao-nova-transcricao"
+                            class="botao-nova-transcricao"
+                            hidden
+                        >
+                            Nova Transcrição
+                        </button>
+
+
+                        <button
+                            type="button"
+                            id="botao-transcrever"
+                            class="botao-transcrever"
+                            disabled
+                        >
+                            Iniciar Transcrição
+                        </button>
+
+
+                        <button
+                            type="button"
+                            id="botao-pausar"
+                            class="botao-pausar"
+                            disabled
+                        >
+                            Pausar
+                        </button>
+
+
+                        <button
+                            type="button"
+                            id="botao-cancelar"
+                            class="botao-cancelar"
+                            disabled
+                        >
+                            Cancelar
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </section>
 
     </main>
+
+
+    <script
+        src="{{ url_for('static', filename='js/script.js') }}"
+    ></script>
 
 </body>
 
