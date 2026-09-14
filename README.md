@@ -8,11 +8,37 @@ O projeto possui interface web, fila de processamento, cancelamento imediato, tr
 
 ---
 
+## 🖥️ Demonstração
+
+### Interface principal
+
+Seleção de múltiplos arquivos para criação da fila de processamento.
+
+![Interface principal da aplicação](docs/images/interface-principal.png)
+
+---
+
+### Processamento
+
+Acompanhamento da fila em tempo real, com progresso, arquivo atual, cronômetros e estados individuais.
+
+![Aplicação realizando uma transcrição](docs/images/processamento.png)
+
+---
+
+### Resultado da transcrição
+
+Após a conclusão, o texto pode ser visualizado diretamente na aplicação e exportado para Microsoft Word.
+
+![Resultado da transcrição](docs/images/resultado.png)
+
+---
+
 ## 📌 Sobre o projeto
 
 O **Transcrição em Texto** foi desenvolvido com o objetivo de transformar arquivos de áudio e vídeo em documentos de texto de forma simples, organizada e automatizada.
 
-A aplicação utiliza o **OpenAI Whisper** para reconhecimento de fala e um backend desenvolvido com **Flask**.
+A aplicação utiliza o **Whisper** para reconhecimento de fala e um backend desenvolvido com **Flask**.
 
 O processamento ocorre localmente no computador, permitindo que os arquivos sejam transcritos sem depender de serviços externos de transcrição.
 
@@ -224,7 +250,7 @@ Os documentos Word gerados permanecem armazenados normalmente.
 
 - Python
 - Flask
-- OpenAI Whisper
+- Whisper
 - PyTorch
 - python-docx
 - multiprocessing
@@ -263,6 +289,12 @@ python-docx 1.1.2
 
 ```text
 transcricao-audio-web/
+│
+├── docs/
+│   └── images/
+│       ├── interface-principal.png
+│       ├── processamento.png
+│       └── resultado.png
 │
 ├── static/
 │   ├── css/
@@ -306,7 +338,7 @@ cd transcricao-audio-web
 
 ### 2. Criar um ambiente virtual
 
-Windows:
+No Windows:
 
 ```powershell
 python -m venv .venv
@@ -338,7 +370,7 @@ Depois da instalação, confirme no terminal:
 ffmpeg -version
 ```
 
-Se o comando apresentar as informações da versão instalada, o FFmpeg está disponível no PATH do sistema.
+Se o comando apresentar as informações da versão instalada, o FFmpeg está disponível no `PATH` do sistema.
 
 ---
 
@@ -348,7 +380,7 @@ Se o comando apresentar as informações da versão instalada, o FFmpeg está di
 python app.py
 ```
 
-Após a inicialização, acesse:
+Após a inicialização, acesse no navegador:
 
 ```text
 http://127.0.0.1:5000
@@ -479,14 +511,10 @@ Projeto desenvolvido para estudo, prática de desenvolvimento Python e composiç
 
 ## 🔗 Links
 
-**GitHub**
+### GitHub
 
-```text
-https://github.com/LeandroAugFerreira/transcricao-audio-web
-```
+[Repositório Transcrição em Texto](https://github.com/LeandroAugFerreira/transcricao-audio-web)
 
-**Portfólio**
+### Portfólio
 
-```text
-https://leandroaugferreira.github.io/
-```
+[Portfólio — Leandro Augusto Ferreira](https://leandroaugferreira.github.io/)
