@@ -7,21 +7,28 @@ on:
     tags:
       - "v*"
 
+
 permissions:
   contents: read
 
+
 jobs:
+
   build-windows:
+
     name: Build Windows
+
     runs-on: windows-latest
 
+
     steps:
+
       # ======================================================
       # CÓDIGO-FONTE
       # ======================================================
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
 
       # ======================================================
@@ -29,9 +36,11 @@ jobs:
       # ======================================================
 
       - name: Setup Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
+
           python-version: "3.13"
+
           cache: "pip"
 
 
@@ -42,12 +51,14 @@ jobs:
       - name: Upgrade pip
         shell: pwsh
         run: |
+
           python -m pip install --upgrade pip
 
 
       - name: Install Python dependencies
         shell: pwsh
         run: |
+
           python -m pip install -r requirements-windows-exe.txt
 
 
@@ -58,41 +69,190 @@ jobs:
       - name: Validate PyTorch
         shell: pwsh
         run: |
+
           python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.cuda.is_available())"
+
 
           $versaoTorch = python -c "import torch; print(torch.__version__)"
 
+
           if ($versaoTorch.Trim() -ne "2.8.0+cpu") {
+
               throw "Versão inesperada do PyTorch: $versaoTorch"
+
           }
 
 
       # ======================================================
       # FFMPEG
+      #
+      # Fazemos download direto do build estático oficial
+      # disponibilizado pela Gyan.dev.
+      #
+      # NÃO utilizamos o shim do Chocolatey.
       # ======================================================
 
-      - name: Install FFmpeg 8.1
+      - name: Download FFmpeg 8.1.2
         shell: pwsh
         run: |
-          choco install ffmpeg --version=8.1.0 -y --no-progress
+
+          $url = "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip"
 
 
-      - name: Locate FFmpeg
+          Write-Host ""
+          Write-Host "Baixando FFmpeg 8.1.2..."
+          Write-Host $url
+          Write-Host ""
+
+
+          Invoke-WebRequest `
+            -Uri $url `
+            -OutFile ".\ffmpeg-8.1.2-essentials_build.zip"
+
+
+      # ======================================================
+      # VALIDAR SHA256 DO FFMPEG
+      #
+      # SHA256 oficial publicado pela Gyan.dev:
+      #
+      # db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec
+      # ======================================================
+
+      - name: Validate FFmpeg SHA256
+        shell: pwsh
+        run: |
+
+          $arquivo = ".\ffmpeg-8.1.2-essentials_build.zip"
+
+
+          $hashEsperado = "db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec"
+
+
+          $hashCalculado = (
+              Get-FileHash `
+                -Path $arquivo `
+                -Algorithm SHA256
+          ).Hash.ToLower()
+
+
+          Write-Host ""
+          Write-Host "SHA256 esperado:"
+          Write-Host $hashEsperado
+
+          Write-Host ""
+          Write-Host "SHA256 calculado:"
+          Write-Host $hashCalculado
+
+          Write-Host ""
+
+
+          if ($hashCalculado -ne $hashEsperado) {
+
+              throw "O SHA256 do FFmpeg não corresponde ao valor oficial."
+
+          }
+
+
+          Write-Host "SHA256 do FFmpeg validado com sucesso."
+
+
+      # ======================================================
+      # EXTRAIR FFMPEG
+      # ======================================================
+
+      - name: Extract FFmpeg
+        shell: pwsh
+        run: |
+
+          $destino = ".\ffmpeg-package"
+
+
+          if (Test-Path $destino) {
+
+              Remove-Item `
+                -Recurse `
+                -Force `
+                $destino
+
+          }
+
+
+          Expand-Archive `
+            -Path ".\ffmpeg-8.1.2-essentials_build.zip" `
+            -DestinationPath $destino `
+            -Force
+
+
+          Write-Host ""
+          Write-Host "FFmpeg extraído."
+          Write-Host ""
+
+
+      # ======================================================
+      # LOCALIZAR O FFMPEG REAL
+      # ======================================================
+
+      - name: Locate real FFmpeg binary
         id: ffmpeg
         shell: pwsh
         run: |
-          $ffmpeg = (Get-Command ffmpeg.exe).Source
 
-          if (-not (Test-Path $ffmpeg)) {
-              throw "FFmpeg não encontrado."
+          $ffmpeg = Get-ChildItem `
+              -Path ".\ffmpeg-package" `
+              -Filter "ffmpeg.exe" `
+              -File `
+              -Recurse `
+            |
+            Where-Object {
+
+                $_.DirectoryName -like "*\bin"
+
+            } `
+            |
+            Select-Object -First 1
+
+
+          if ($null -eq $ffmpeg) {
+
+              throw "ffmpeg.exe real não encontrado."
+
           }
 
-          Write-Host "FFmpeg encontrado em:"
-          Write-Host $ffmpeg
 
-          ffmpeg -version
+          Write-Host ""
+          Write-Host "FFmpeg real encontrado:"
+          Write-Host $ffmpeg.FullName
 
-          "path=$ffmpeg" >> $env:GITHUB_OUTPUT
+          Write-Host ""
+          Write-Host "Tamanho:"
+          Write-Host $ffmpeg.Length
+
+          Write-Host ""
+
+
+          # O FFmpeg real possui dezenas de MB.
+          # Um shim possui tamanho muito menor.
+
+          if ($ffmpeg.Length -lt 10000000) {
+
+              throw "O ffmpeg.exe encontrado é pequeno demais para ser o executável real."
+
+          }
+
+
+          Write-Host "Executando FFmpeg..."
+
+          & $ffmpeg.FullName -version
+
+
+          if ($LASTEXITCODE -ne 0) {
+
+              throw "O FFmpeg baixado não pôde ser executado."
+
+          }
+
+
+          "path=$($ffmpeg.FullName)" >> $env:GITHUB_OUTPUT
 
 
       # ======================================================
@@ -102,7 +262,15 @@ jobs:
       - name: Build application with PyInstaller
         shell: pwsh
         run: |
+
           $ffmpeg = "${{ steps.ffmpeg.outputs.path }}"
+
+
+          Write-Host ""
+          Write-Host "FFmpeg usado pelo PyInstaller:"
+          Write-Host $ffmpeg
+          Write-Host ""
+
 
           python -m PyInstaller `
             --noconfirm `
@@ -118,20 +286,83 @@ jobs:
 
 
       # ======================================================
-      # VALIDAR BUILD
+      # VALIDAR EXECUTÁVEL
       # ======================================================
 
       - name: Validate application build
         shell: pwsh
         run: |
+
           $exe = ".\dist\Transcricao em Texto\Transcricao em Texto.exe"
 
+
           if (-not (Test-Path $exe)) {
+
               throw "Executável não foi criado."
+
           }
 
+
+          Write-Host ""
           Write-Host "Executável criado:"
           Get-Item $exe
+
+
+      # ======================================================
+      # VALIDAR FFMPEG EMPACOTADO
+      #
+      # Esta etapa impede que um shim volte a ser distribuído.
+      # ======================================================
+
+      - name: Validate bundled FFmpeg
+        shell: pwsh
+        run: |
+
+          $ffmpegBundled = ".\dist\Transcricao em Texto\_internal\ffmpeg\bin\ffmpeg.exe"
+
+
+          if (-not (Test-Path $ffmpegBundled)) {
+
+              throw "FFmpeg não foi incluído na distribuição."
+
+          }
+
+
+          $arquivo = Get-Item $ffmpegBundled
+
+
+          Write-Host ""
+          Write-Host "FFmpeg empacotado:"
+          Write-Host $arquivo.FullName
+
+          Write-Host ""
+          Write-Host "Tamanho:"
+          Write-Host $arquivo.Length
+
+          Write-Host ""
+
+
+          if ($arquivo.Length -lt 10000000) {
+
+              throw "O FFmpeg empacotado é pequeno demais e pode ser um shim."
+
+          }
+
+
+          Write-Host "Executando FFmpeg empacotado..."
+
+          & $ffmpegBundled -version
+
+
+          if ($LASTEXITCODE -ne 0) {
+
+              throw "O FFmpeg empacotado não pôde ser executado."
+
+          }
+
+
+          Write-Host ""
+          Write-Host "FFmpeg empacotado validado com sucesso."
 
 
       # ======================================================
@@ -141,32 +372,52 @@ jobs:
       - name: Download Inno Setup 7.1.0
         shell: pwsh
         run: |
+
           $url = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
+
 
           Invoke-WebRequest `
             -Uri $url `
             -OutFile ".\innosetup-7.1.0-x64.exe"
 
 
+      # ======================================================
+      # VALIDAR ASSINATURA DO INNO SETUP
+      # ======================================================
+
       - name: Validate Inno Setup signature
         shell: pwsh
         run: |
+
           $assinatura = Get-AuthenticodeSignature ".\innosetup-7.1.0-x64.exe"
 
+
+          Write-Host ""
           Write-Host "Status da assinatura:"
           Write-Host $assinatura.Status
 
+          Write-Host ""
           Write-Host "Fornecedor:"
           Write-Host $assinatura.SignerCertificate.Subject
 
+          Write-Host ""
+
+
           if ($assinatura.Status -ne "Valid") {
+
               throw "A assinatura digital do instalador do Inno Setup não é válida."
+
           }
 
+
+      # ======================================================
+      # INSTALAR INNO SETUP
+      # ======================================================
 
       - name: Install Inno Setup
         shell: pwsh
         run: |
+
           Start-Process `
             -FilePath ".\innosetup-7.1.0-x64.exe" `
             -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
@@ -180,16 +431,24 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
+
           $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
 
+
           if (-not (Test-Path $iscc)) {
+
               throw "ISCC.exe não encontrado."
+
           }
+
 
           & $iscc ".\installer.iss"
 
+
           if ($LASTEXITCODE -ne 0) {
+
               throw "Falha ao gerar o instalador."
+
           }
 
 
@@ -200,21 +459,30 @@ jobs:
       - name: Validate installer
         shell: pwsh
         run: |
+
           $setup = ".\installer-output\TranscricaoEmTexto-Setup.exe"
 
+
           if (-not (Test-Path $setup)) {
+
               throw "Instalador não foi criado."
+
           }
 
+
+          Write-Host ""
           Write-Host "Instalador criado:"
+
           Get-Item $setup
+
 
           $hash = Get-FileHash `
             -Path $setup `
             -Algorithm SHA256
 
+
           Write-Host ""
-          Write-Host "SHA256:"
+          Write-Host "SHA256 do instalador:"
           Write-Host $hash.Hash
 
 
@@ -226,7 +494,11 @@ jobs:
         id: upload-unsigned-installer
         uses: actions/upload-artifact@v4
         with:
+
           name: TranscricaoEmTexto-Windows-Unsigned
+
           path: installer-output/TranscricaoEmTexto-Setup.exe
+
           if-no-files-found: error
+
           retention-days: 30
