@@ -2,9 +2,9 @@
 
 Aplicação web local desenvolvida em Python para transcrição automática de arquivos de áudio e vídeo utilizando o modelo Whisper.
 
-O projeto possui interface web, fila de processamento, cancelamento imediato, tratamento de erros, geração automática de documentos Microsoft Word e, a partir da versão v1.1.0, distribuição para Windows por meio de executável e instalador.
+O projeto possui interface web, fila de processamento, cancelamento imediato, tratamento de erros, geração automática de documentos Microsoft Word e distribuição para Windows por meio de executável e instalador.
 
-Versão atual: v1.1.0
+Versão atual: v1.1.1
 
 🖥️ Demonstração
 
@@ -92,33 +92,29 @@ Instalador para Windows com atalho no Menu Iniciar e opção de atalho na Área 
 
 FFmpeg integrado à distribuição Windows
 
-🆕 Novidades da v1.1.0
+🆕 Novidades da v1.1.1
 
-A versão v1.1.0 adiciona a distribuição desktop para Windows.
+A versão v1.1.1 corrige e fortalece o processo automatizado de build para Windows.
 
 Principais mudanças:
 
-suporte ao empacotamento com PyInstaller;
+correção do empacotamento do FFmpeg no GitHub Actions;
 
-instalador criado com Inno Setup;
+remoção do uso do shim do Chocolatey;
 
-FFmpeg incorporado ao aplicativo;
+download direto do build estático do FFmpeg 8.1.2;
 
-cache dedicado para o modelo Whisper no Windows;
+validação do SHA-256 do pacote do FFmpeg;
 
-pasta de dados separada da pasta de instalação;
+validação do tamanho e execução do ffmpeg.exe antes do empacotamento;
 
-runtime hook específico para inicialização do PyTorch no Windows;
+validação do FFmpeg já incorporado ao diretório final do PyInstaller;
 
-uso de torch 2.8.0+cpu na distribuição Windows;
+build reproduzível do instalador utilizando GitHub Actions;
 
-limitação de OpenMP/MKL a uma thread para estabilidade do worker;
+geração do instalador como artifact do GitHub Actions;
 
-abertura automática do navegador em http://localhost:5000;
-
-manutenção do servidor restrito ao loopback local;
-
-suporte ao cancelamento imediato também no executável instalado.
+preparação da cadeia de build para futura assinatura digital via SignPath Foundation.
 
 🎧 Formatos suportados
 
@@ -247,7 +243,7 @@ a aplicação fica pronta para uma nova transcrição.
 
 Durante o desenvolvimento da distribuição Windows, foram identificadas condições importantes para manter o Whisper estável dentro do executável.
 
-A distribuição v1.1.0 foi validada com:
+A distribuição atual foi validada com:
 
 torch 2.8.0+cpu
 OMP_NUM_THREADS=1
@@ -260,6 +256,30 @@ rthook_torch_windows.py
 é utilizado como runtime hook do PyInstaller para preparar a pasta de bibliotecas do PyTorch e carregar c10.dll antes da inicialização do Torch no executável.
 
 Essa configuração faz parte do build Windows da aplicação.
+
+🎞️ FFmpeg no build Windows
+
+A versão v1.1.1 utiliza um build estático do FFmpeg para Windows.
+
+O workflow automatizado:
+
+baixa o pacote do FFmpeg;
+
+valida o SHA-256 esperado;
+
+extrai o pacote;
+
+localiza o ffmpeg.exe real;
+
+valida o tamanho do executável;
+
+executa ffmpeg -version;
+
+incorpora o binário ao build do PyInstaller;
+
+executa novamente o FFmpeg já empacotado.
+
+Essa validação evita a distribuição acidental de shims ou redirecionadores que dependam de instalações externas.
 
 🛡️ Tratamento de erros
 
@@ -385,15 +405,19 @@ Inno Setup
 
 runtime hook personalizado para PyTorch
 
+Automação de build
+
+GitHub Actions
+
 Versionamento
 
 Git
 
 GitHub
 
-📦 Ambiente validado para a v1.1.0
+📦 Ambiente validado para a v1.1.1
 
-A distribuição Windows da v1.1.0 foi validada com:
+A distribuição Windows da v1.1.1 utiliza:
 
 Python 3.13
 Flask 3.1.0
@@ -402,6 +426,7 @@ torch 2.8.0+cpu
 python-docx 1.1.2
 PyInstaller 6.22.3
 pyinstaller-hooks-contrib 2026.7
+FFmpeg 8.1.2 Essentials
 Inno Setup 7.1.0
 
 O build Windows utiliza especificamente torch 2.8.0+cpu.
@@ -409,6 +434,10 @@ O build Windows utiliza especificamente torch 2.8.0+cpu.
 📁 Estrutura do projeto
 
 transcricao-audio-web/
+│
+├── .github/
+│   └── workflows/
+│       └── windows-build.yml
 │
 ├── docs/
 │   └── images/
@@ -488,7 +517,17 @@ http://localhost:5000
 
 🪟 Build do executável para Windows
 
-A distribuição Windows deve ser construída em um ambiente separado do ambiente de desenvolvimento principal.
+A distribuição Windows pode ser construída automaticamente pelo GitHub Actions por meio do workflow:
+
+.github/workflows/windows-build.yml
+
+O workflow é executado:
+
+manualmente por workflow_dispatch;
+
+automaticamente quando uma tag v* é enviada ao GitHub.
+
+Também é possível reproduzir o ambiente localmente.
 
 Exemplo:
 
@@ -496,7 +535,7 @@ python -m venv .venv-exe
 .\.venv-exe\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 
-Para reproduzir o ambiente validado do executável:
+Instale as dependências do build:
 
 python -m pip install -r requirements-windows-exe.txt
 
@@ -511,13 +550,9 @@ CUDA: False
 
 📦 Gerar o executável com PyInstaller
 
-Com o ambiente .venv-exe ativo:
+Exemplo do comando utilizado no build Windows:
 
-python -m PyInstaller --noconfirm --clean --onedir --name "Transcricao em Texto" --runtime-hook "rthook_torch_windows.py" --add-data "templates;templates" --add-data "static;static" --add-binary "C:\ffmpeg\bin\ffmpeg.exe;ffmpeg\bin" --collect-all whisper app.py
-
-Se o FFmpeg estiver instalado em outro local, ajuste o caminho:
-
-C:\ffmpeg\bin\ffmpeg.exe
+python -m PyInstaller --noconfirm --clean --onedir --name "Transcricao em Texto" --runtime-hook "rthook_torch_windows.py" --add-data "templates;templates" --add-data "static;static" --add-binary "<CAMINHO_FFMPEG>;ffmpeg\bin" --collect-all whisper app.py
 
 O resultado será criado em:
 
@@ -535,19 +570,47 @@ contém a configuração do instalador.
 
 Depois de gerar o executável com PyInstaller:
 
-abra installer.iss no Inno Setup Compiler;
+abra installer.iss no Inno Setup Compiler; ou
 
-compile o script;
+execute o build automatizado do GitHub Actions.
 
-o instalador será criado na pasta installer-output.
-
-O arquivo final possui o nome:
+O instalador final possui o nome:
 
 TranscricaoEmTexto-Setup.exe
 
 A instalação padrão utiliza:
 
 C:\Program Files\Transcrição em Texto
+
+🤖 Build automatizado com GitHub Actions
+
+O workflow de Windows executa uma cadeia automatizada de build e validação:
+
+Código-fonte público
+        ↓
+GitHub Actions
+        ↓
+Python 3.13
+        ↓
+Dependências
+        ↓
+PyTorch 2.8.0+cpu
+        ↓
+Download e validação do FFmpeg
+        ↓
+PyInstaller
+        ↓
+Validação do FFmpeg empacotado
+        ↓
+Inno Setup
+        ↓
+Validação do instalador
+        ↓
+GitHub Actions artifact
+
+O artifact não assinado é publicado com o nome:
+
+TranscricaoEmTexto-Windows-Unsigned
 
 🔏 Code signing policy
 
@@ -593,7 +656,7 @@ somente artefatos produzidos a partir do código-fonte e dos scripts de build de
 
 Status
 
-A versão v1.1.0 está publicada no GitHub.
+A versão v1.1.1 está sendo preparada como release oficial do Windows.
 
 O projeto está em processo de preparação para integração com o SignPath e assinatura digital das distribuições oficiais para Windows.
 
@@ -681,7 +744,7 @@ Possíveis evoluções futuras:
 
 assinatura digital dos instaladores oficiais;
 
-automação do build e release do Windows;
+integração do SignPath ao workflow de build;
 
 seleção do modelo Whisper pela interface;
 
@@ -701,9 +764,29 @@ versão pública hospedada da aplicação.
 
 🏷️ Versões
 
+v1.1.1
+
+Correção e validação da cadeia de build para Windows.
+
+Principais alterações:
+
+correção do FFmpeg incorporado ao instalador;
+
+substituição do shim do Chocolatey pelo binário real do FFmpeg;
+
+FFmpeg 8.1.2 com validação SHA-256;
+
+validação automatizada do FFmpeg antes e depois do PyInstaller;
+
+build Windows validado pelo GitHub Actions;
+
+geração do instalador como artifact automatizado;
+
+preparação do build verificável para assinatura digital.
+
 v1.1.0
 
-Distribuição para Windows.
+Primeira distribuição para Windows.
 
 Principais recursos adicionados:
 
@@ -725,7 +808,7 @@ abertura automática em http://localhost:5000;
 
 cancelamento imediato validado no executável;
 
-preparação para assinatura digital.
+preparação inicial para assinatura digital.
 
 v1.0.0
 

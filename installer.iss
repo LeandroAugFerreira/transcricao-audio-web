@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Transcrição em Texto"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Leandro Augusto Ferreira"
 #define MyAppExeName "Transcricao em Texto.exe"
 
