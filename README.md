@@ -245,7 +245,7 @@ a aplicação fica pronta para uma nova transcrição.
 
 🛡️ Estabilidade do PyTorch no Windows
 
-Durante o desenvolvimento da distribuição Windows, foram identificadas duas condições importantes para manter o Whisper estável dentro do executável.
+Durante o desenvolvimento da distribuição Windows, foram identificadas condições importantes para manter o Whisper estável dentro do executável.
 
 A distribuição v1.1.0 foi validada com:
 
@@ -435,6 +435,7 @@ transcricao-audio-web/
 ├── .gitignore
 ├── LICENSE
 ├── requirements.txt
+├── requirements-windows-exe.txt
 └── README.md
 
 As pastas e arquivos gerados durante build e execução, como .venv-exe, build, dist, installer-output, arquivos .spec, uploads temporários, transcrições e mídias de teste não são versionados.
@@ -495,13 +496,9 @@ python -m venv .venv-exe
 .\.venv-exe\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 
-Instale o PyTorch CPU validado para o build:
+Para reproduzir o ambiente validado do executável:
 
-python -m pip install torch==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu
-
-Instale as demais dependências:
-
-python -m pip install numpy Flask==3.1.0 openai-whisper==20250625 python-docx==1.1.2 pyinstaller pyinstaller-hooks-contrib
+python -m pip install -r requirements-windows-exe.txt
 
 Confirme o PyTorch:
 
@@ -552,31 +549,57 @@ A instalação padrão utiliza:
 
 C:\Program Files\Transcrição em Texto
 
-🔏 Política de assinatura de código
+🔏 Code signing policy
 
-O projeto pretende utilizar assinatura de código confiável para os instaladores oficiais do Windows.
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
 
-A política do projeto é:
+Team roles
+
+Este projeto é atualmente mantido por um único desenvolvedor.
+
+Authors: Leandro Augusto Ferreira
+
+Reviewers: Leandro Augusto Ferreira
+
+Approvers: Leandro Augusto Ferreira
+
+O responsável listado acima mantém o código-fonte, revisa as alterações incorporadas ao projeto e aprova as solicitações de assinatura das versões oficiais.
+
+Privacy policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+A transcrição é realizada localmente no computador do usuário.
+
+Os arquivos de áudio e vídeo utilizados durante o processamento não são enviados para serviços externos de reconhecimento de fala.
+
+Uma conexão com a internet pode ser utilizada para baixar o modelo Whisper quando ele ainda não estiver disponível no cache local. Essa conexão é destinada à obtenção dos arquivos necessários do modelo; o conteúdo do usuário não é enviado para transcrição externa.
+
+Signing rules
 
 artefatos assinados devem corresponder a uma versão pública e identificável do código-fonte;
 
-chaves privadas de assinatura nunca devem ser armazenadas no repositório;
+chaves privadas e credenciais de assinatura nunca devem ser armazenadas no repositório;
 
-credenciais e segredos de assinatura não devem fazer parte do código-fonte;
-
-o processo de assinatura deve ocorrer somente para builds oficiais;
+somente builds oficiais podem ser submetidos para assinatura;
 
 alterações no código exigem um novo build antes de uma nova assinatura;
 
-builds de desenvolvimento não devem ser apresentados como releases oficiais assinados.
+builds de desenvolvimento não devem ser apresentados como releases oficiais assinados;
 
-Status atual
+toda solicitação oficial de assinatura deve ser aprovada pelo responsável pelo projeto;
 
-O instalador da v1.1.0 encontra-se em processo de preparação para assinatura digital.
+somente artefatos produzidos a partir do código-fonte e dos scripts de build deste repositório podem ser submetidos para assinatura.
 
-Enquanto o instalador não possuir uma assinatura confiável, recursos de segurança do Windows, como o Smart App Control, podem bloquear sua execução em alguns computadores.
+Status
 
-Não é recomendado desativar mecanismos de segurança do Windows apenas para executar uma versão não assinada.
+A versão v1.1.0 está publicada no GitHub.
+
+O projeto está em processo de preparação para integração com o SignPath e assinatura digital das distribuições oficiais para Windows.
+
+Enquanto um instalador não possuir uma assinatura confiável, mecanismos de segurança do Windows, como o Smart App Control, podem bloquear sua execução.
+
+Não é recomendado desativar mecanismos de segurança do Windows para executar versões não assinadas.
 
 🖥️ Utilização
 
@@ -645,6 +668,12 @@ A primeira inicialização em um computador novo pode levar mais tempo porque o 
 A versão atual possui um contexto inicial voltado principalmente para conteúdos acadêmicos e termos relacionados a tecnologia e análise de dados.
 
 O executável Windows utiliza processamento por CPU.
+
+🧩 Componentes de terceiros
+
+O projeto utiliza componentes Open Source de terceiros, incluindo Flask, OpenAI Whisper, PyTorch, python-docx, PyInstaller e FFmpeg.
+
+Cada componente permanece sujeito aos seus respectivos termos e licenças.
 
 🗺️ Roadmap
 
@@ -735,6 +764,8 @@ Consulte o arquivo:
 LICENSE
 
 para os termos completos.
+
+Os componentes de terceiros incluídos ou utilizados pelo projeto permanecem sujeitos às suas próprias licenças.
 
 👨‍💻 Autor
 
