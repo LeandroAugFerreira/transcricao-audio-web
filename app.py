@@ -10,48 +10,203 @@ from flask import (
     send_from_directory
 )
 
-import os
-import re
-import uuid
-import queue
 import atexit
+import multiprocessing
+import os
+import queue
+import re
+import shutil
+import subprocess
+import sys
 import threading
 import traceback
 import unicodedata
-import subprocess
-import multiprocessing
+import uuid
+import webbrowser
 
 from datetime import datetime
 
 from docx import Document
-from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import Cm, Pt
 
 
 # ============================================================
-# CONFIGURAÇÃO GERAL
+# ESTABILIDADE DO PYTORCH / WHISPER NO WINDOWS
+#
+# Durante os testes foi identificado que o PyTorch CPU
+# encerrava o processo do worker ao iniciar a transcrição
+# quando OpenMP/MKL utilizavam múltiplas threads.
+#
+# Limitando essas bibliotecas a uma thread, o Whisper
+# permanece estável dentro do worker separado.
+#
+# Esta configuração é herdada também pelos subprocessos
+# criados pelo multiprocessing no Windows.
 # ============================================================
 
-app = Flask(__name__)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
 
 # ============================================================
-# PASTAS DO PROJETO
+# MODO DE EXECUÇÃO
+#
+# O mesmo arquivo funciona:
+#
+# 1. pelo Python:
+#    python app.py
+#
+# 2. empacotado pelo PyInstaller:
+#    Transcrição em Texto.exe
 # ============================================================
 
-PASTA_PROJETO = os.path.dirname(
-    os.path.abspath(__file__)
+MODO_EXECUTAVEL = bool(
+    getattr(
+        sys,
+        "frozen",
+        False
+    )
 )
 
+
+# ============================================================
+# PASTA DOS RECURSOS
+#
+# Em Python:
+#     pasta onde está o app.py.
+#
+# No PyInstaller:
+#     sys._MEIPASS contém os arquivos empacotados,
+#     incluindo templates e static.
+# ============================================================
+
+def obter_pasta_recursos():
+
+    if (
+        MODO_EXECUTAVEL
+        and hasattr(
+            sys,
+            "_MEIPASS"
+        )
+    ):
+
+        return sys._MEIPASS
+
+
+    return os.path.dirname(
+        os.path.abspath(
+            __file__
+        )
+    )
+
+
+# ============================================================
+# PASTA DA APLICAÇÃO
+# ============================================================
+
+def obter_pasta_aplicacao():
+
+    if MODO_EXECUTAVEL:
+
+        return os.path.dirname(
+            os.path.abspath(
+                sys.executable
+            )
+        )
+
+
+    return os.path.dirname(
+        os.path.abspath(
+            __file__
+        )
+    )
+
+
+# ============================================================
+# PASTA DOCUMENTOS
+#
+# No EXE não devemos salvar arquivos dentro de Program Files
+# ou de outras pastas protegidas.
+#
+# As transcrições ficarão em:
+#
+# Documentos\Transcrição em Texto\transcricoes
+# ============================================================
+
+def obter_pasta_documentos():
+
+    pasta = os.path.join(
+        os.path.expanduser(
+            "~"
+        ),
+        "Documents"
+    )
+
+
+    try:
+
+        os.makedirs(
+            pasta,
+            exist_ok=True
+        )
+
+
+        return pasta
+
+
+    except Exception:
+
+        return obter_pasta_aplicacao()
+
+
+# ============================================================
+# PASTAS PRINCIPAIS
+# ============================================================
+
+PASTA_RECURSOS = (
+    obter_pasta_recursos()
+)
+
+PASTA_PROJETO = (
+    obter_pasta_aplicacao()
+)
+
+
+# ============================================================
+# DADOS DA APLICAÇÃO
+#
+# Em modo Python:
+# mantém o comportamento atual.
+#
+# Em modo EXE:
+# usa a pasta Documentos do usuário.
+# ============================================================
+
+if MODO_EXECUTAVEL:
+
+    PASTA_DADOS = os.path.join(
+        obter_pasta_documentos(),
+        "Transcrição em Texto"
+    )
+
+else:
+
+    PASTA_DADOS = (
+        PASTA_PROJETO
+    )
+
+
 PASTA_UPLOADS = os.path.join(
-    PASTA_PROJETO,
+    PASTA_DADOS,
     "uploads"
 )
 
+
 PASTA_TRANSCRICOES = os.path.join(
-    PASTA_PROJETO,
+    PASTA_DADOS,
     "transcricoes"
 )
 
@@ -61,9 +216,197 @@ os.makedirs(
     exist_ok=True
 )
 
+
 os.makedirs(
     PASTA_TRANSCRICOES,
     exist_ok=True
+)
+
+
+# ============================================================
+# CACHE DO MODELO WHISPER
+#
+# No Python normal continuamos usando o cache padrão.
+#
+# No EXE o modelo ficará em:
+#
+# AppData\Local\TranscricaoEmTexto\modelos
+#
+# Assim ele precisa ser baixado apenas na primeira utilização.
+# ============================================================
+
+if MODO_EXECUTAVEL:
+
+    pasta_local_appdata = (
+        os.environ.get(
+            "LOCALAPPDATA",
+            os.path.join(
+                os.path.expanduser(
+                    "~"
+                ),
+                "AppData",
+                "Local"
+            )
+        )
+    )
+
+
+    PASTA_MODELOS = os.path.join(
+        pasta_local_appdata,
+        "TranscricaoEmTexto",
+        "modelos"
+    )
+
+
+    os.makedirs(
+        PASTA_MODELOS,
+        exist_ok=True
+    )
+
+
+else:
+
+    PASTA_MODELOS = None
+
+
+# ============================================================
+# TEMPLATES E STATIC
+# ============================================================
+
+PASTA_TEMPLATES = os.path.join(
+    PASTA_RECURSOS,
+    "templates"
+)
+
+
+PASTA_STATIC = os.path.join(
+    PASTA_RECURSOS,
+    "static"
+)
+
+
+# ============================================================
+# CONFIGURAÇÃO FLASK
+# ============================================================
+
+app = Flask(
+
+    __name__,
+
+    template_folder=
+        PASTA_TEMPLATES,
+
+    static_folder=
+        PASTA_STATIC
+)
+
+
+# ============================================================
+# CONFIGURAR FFMPEG
+#
+# Procura nesta ordem:
+#
+# 1. FFmpeg empacotado pelo PyInstaller;
+# 2. FFmpeg ao lado do executável;
+# 3. FFmpeg instalado no PATH do Windows.
+# ============================================================
+
+def configurar_ffmpeg():
+
+    nome_ffmpeg = (
+        "ffmpeg.exe"
+        if os.name == "nt"
+        else
+        "ffmpeg"
+    )
+
+
+    pastas_candidatas = [
+
+        os.path.join(
+            PASTA_RECURSOS,
+            "ffmpeg",
+            "bin"
+        ),
+
+        os.path.join(
+            PASTA_RECURSOS,
+            "ffmpeg"
+        ),
+
+        PASTA_RECURSOS,
+
+        os.path.join(
+            PASTA_PROJETO,
+            "ffmpeg",
+            "bin"
+        ),
+
+        os.path.join(
+            PASTA_PROJETO,
+            "ffmpeg"
+        ),
+
+        PASTA_PROJETO
+    ]
+
+
+    for pasta in pastas_candidatas:
+
+        caminho = os.path.abspath(
+            os.path.join(
+                pasta,
+                nome_ffmpeg
+            )
+        )
+
+
+        if not os.path.isfile(
+            caminho
+        ):
+
+            continue
+
+
+        pasta_ffmpeg = os.path.dirname(
+            caminho
+        )
+
+
+        path_atual = os.environ.get(
+            "PATH",
+            ""
+        )
+
+
+        if (
+            pasta_ffmpeg
+            not in path_atual.split(
+                os.pathsep
+            )
+        ):
+
+            os.environ[
+                "PATH"
+            ] = (
+                pasta_ffmpeg
+                +
+                os.pathsep
+                +
+                path_atual
+            )
+
+
+        return caminho
+
+
+    return shutil.which(
+        "ffmpeg"
+    )
+
+
+CAMINHO_FFMPEG = (
+    configurar_ffmpeg()
 )
 
 
@@ -136,18 +479,18 @@ CORRECOES_SEGURAS = {
 
 
 # ============================================================
-# CONTEXTO DE MULTIPROCESSAMENTO
-#
-# "spawn" é a opção mais segura para Windows.
+# MULTIPROCESSAMENTO
 # ============================================================
 
-CONTEXTO_MP = multiprocessing.get_context(
-    "spawn"
+CONTEXTO_MP = (
+    multiprocessing.get_context(
+        "spawn"
+    )
 )
 
 
 # ============================================================
-# CONTROLE DO WORKER WHISPER
+# CONTROLE DO WORKER
 # ============================================================
 
 worker_processo = None
@@ -157,16 +500,23 @@ worker_fila_comandos = None
 worker_fila_resultados = None
 
 
-worker_lock = threading.Lock()
+worker_lock = (
+    threading.Lock()
+)
 
 
 # ============================================================
-# CONTROLE DA TRANSCRIÇÃO ATUAL
+# CONTROLE DA TRANSCRIÇÃO
 # ============================================================
 
-estado_lock = threading.Lock()
+estado_lock = (
+    threading.Lock()
+)
 
-processamento_lock = threading.Lock()
+
+processamento_lock = (
+    threading.Lock()
+)
 
 
 tarefa_ativa_id = None
@@ -175,12 +525,7 @@ evento_cancelamento_ativo = None
 
 
 # ============================================================
-# WORKER DO WHISPER
-#
-# Esta função roda em OUTRO processo.
-#
-# O modelo é carregado uma única vez dentro desse processo
-# e permanece disponível para as transcrições seguintes.
+# WORKER WHISPER
 # ============================================================
 
 def worker_whisper(
@@ -194,7 +539,10 @@ def worker_whisper(
         print("=" * 60)
         print("WORKER WHISPER")
         print("Carregando modelo...")
-        print(f"Modelo: {MODELO_WHISPER}")
+        print(
+            f"Modelo: "
+            f"{MODELO_WHISPER}"
+        )
         print("=" * 60)
         print()
 
@@ -202,15 +550,44 @@ def worker_whisper(
         import whisper
 
 
-        modelo = whisper.load_model(
-            MODELO_WHISPER
-        )
+        # ====================================================
+        # NO EXE UTILIZA CACHE PRÓPRIO
+        # ====================================================
+
+        if (
+            MODO_EXECUTAVEL
+            and PASTA_MODELOS
+        ):
+
+            modelo = (
+                whisper.load_model(
+
+                    MODELO_WHISPER,
+
+                    download_root=
+                        PASTA_MODELOS
+                )
+            )
+
+
+        else:
+
+            modelo = (
+                whisper.load_model(
+                    MODELO_WHISPER
+                )
+            )
 
 
         print()
         print("=" * 60)
-        print("Worker Whisper pronto.")
-        print(f"Modelo carregado: {MODELO_WHISPER}")
+        print(
+            "Worker Whisper pronto."
+        )
+        print(
+            f"Modelo carregado: "
+            f"{MODELO_WHISPER}"
+        )
         print("=" * 60)
         print()
 
@@ -219,13 +596,24 @@ def worker_whisper(
 
         print()
         print("!" * 60)
-        print("ERRO AO CARREGAR O MODELO WHISPER")
-        print(f"Tipo: {type(erro).__name__}")
-        print(f"Mensagem: {str(erro)}")
+        print(
+            "ERRO AO CARREGAR O MODELO WHISPER"
+        )
+        print(
+            f"Tipo: "
+            f"{type(erro).__name__}"
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro)}"
+        )
         print()
+
         traceback.print_exc()
+
         print("!" * 60)
         print()
+
 
         return
 
@@ -238,52 +626,58 @@ def worker_whisper(
 
         try:
 
-            comando = fila_comandos.get()
+            comando = (
+                fila_comandos.get()
+            )
 
-
-            # =================================================
-            # None encerra o worker normalmente
-            # =================================================
 
             if comando is None:
 
                 print()
-                print("Worker Whisper encerrado.")
+                print(
+                    "Worker Whisper encerrado."
+                )
                 print()
 
                 break
 
 
-            tarefa_id = comando.get(
-                "tarefa_id"
+            tarefa_id = (
+                comando.get(
+                    "tarefa_id"
+                )
             )
 
-            caminho_arquivo = comando.get(
-                "caminho_arquivo"
+
+            caminho_arquivo = (
+                comando.get(
+                    "caminho_arquivo"
+                )
             )
 
-            nome_arquivo = comando.get(
-                "nome_arquivo"
+
+            nome_arquivo = (
+                comando.get(
+                    "nome_arquivo"
+                )
             )
 
 
             print()
             print("=" * 60)
             print(
-                f"WORKER - Transcrevendo: {nome_arquivo}"
+                f"WORKER - Transcrevendo: "
+                f"{nome_arquivo}"
             )
             print(
-                f"Tarefa: {tarefa_id}"
+                f"Tarefa: "
+                f"{tarefa_id}"
             )
             print("=" * 60)
             print()
 
 
             try:
-
-                # =============================================
-                # PRIMEIRA TENTATIVA
-                # =============================================
 
                 print(
                     "Tentativa principal..."
@@ -292,21 +686,24 @@ def worker_whisper(
                 print()
 
 
-                resultado = modelo.transcribe(
+                resultado = (
+                    modelo.transcribe(
 
-                    caminho_arquivo,
+                        caminho_arquivo,
 
-                    language="pt",
+                        language="pt",
 
-                    task="transcribe",
+                        task="transcribe",
 
-                    temperature=0,
+                        temperature=0,
 
-                    condition_on_previous_text=True,
+                        condition_on_previous_text=True,
 
-                    fp16=False,
+                        fp16=False,
 
-                    initial_prompt=CONTEXTO_WHISPER
+                        initial_prompt=
+                            CONTEXTO_WHISPER
+                    )
                 )
 
 
@@ -335,7 +732,8 @@ def worker_whisper(
 
                 print()
                 print(
-                    f"Worker concluiu: {nome_arquivo}"
+                    f"Worker concluiu: "
+                    f"{nome_arquivo}"
                 )
                 print()
 
@@ -350,21 +748,20 @@ def worker_whisper(
                 print()
                 print("-" * 60)
                 print(
-                    "RuntimeError detectado no Whisper."
+                    "RuntimeError detectado "
+                    "no Whisper."
                 )
                 print(
-                    f"Tipo: {type(erro).__name__}"
+                    f"Tipo: "
+                    f"{type(erro).__name__}"
                 )
                 print(
-                    f"Mensagem: {mensagem_erro}"
+                    f"Mensagem: "
+                    f"{mensagem_erro}"
                 )
                 print("-" * 60)
                 print()
 
-
-                # =============================================
-                # FALLBACK DO ERRO DE TENSOR
-                # =============================================
 
                 if (
                     "cannot reshape tensor of 0 elements"
@@ -377,7 +774,8 @@ def worker_whisper(
                         "Erro de tensor vazio detectado."
                     )
                     print(
-                        "Iniciando modo de compatibilidade..."
+                        "Iniciando modo "
+                        "de compatibilidade..."
                     )
                     print("!" * 60)
                     print()
@@ -385,19 +783,21 @@ def worker_whisper(
 
                     try:
 
-                        resultado = modelo.transcribe(
+                        resultado = (
+                            modelo.transcribe(
 
-                            caminho_arquivo,
+                                caminho_arquivo,
 
-                            language="pt",
+                                language="pt",
 
-                            task="transcribe",
+                                task="transcribe",
 
-                            temperature=0,
+                                temperature=0,
 
-                            condition_on_previous_text=False,
+                                condition_on_previous_text=False,
 
-                            fp16=False
+                                fp16=False
+                            )
                         )
 
 
@@ -426,7 +826,8 @@ def worker_whisper(
 
                         print()
                         print(
-                            "Fallback concluído com sucesso."
+                            "Fallback concluído "
+                            "com sucesso."
                         )
                         print()
 
@@ -441,7 +842,8 @@ def worker_whisper(
                         print()
                         print("!" * 60)
                         print(
-                            "ERRO NO FALLBACK DO WHISPER"
+                            "ERRO NO FALLBACK "
+                            "DO WHISPER"
                         )
                         print(
                             f"Tipo: "
@@ -532,10 +934,12 @@ def worker_whisper(
                     "ERRO NO WORKER WHISPER"
                 )
                 print(
-                    f"Tipo: {type(erro).__name__}"
+                    f"Tipo: "
+                    f"{type(erro).__name__}"
                 )
                 print(
-                    f"Mensagem: {str(erro)}"
+                    f"Mensagem: "
+                    f"{str(erro)}"
                 )
                 print()
                 print(
@@ -554,7 +958,9 @@ def worker_whisper(
                             False,
 
                         "erro":
-                            str(erro),
+                            str(
+                                erro
+                            ),
 
                         "tipo_erro":
                             type(
@@ -575,10 +981,12 @@ def worker_whisper(
                 "ERRO GERAL NO LOOP DO WORKER"
             )
             print(
-                f"Tipo: {type(erro).__name__}"
+                f"Tipo: "
+                f"{type(erro).__name__}"
             )
             print(
-                f"Mensagem: {str(erro)}"
+                f"Mensagem: "
+                f"{str(erro)}"
             )
             print()
 
@@ -589,9 +997,7 @@ def worker_whisper(
 
 
 # ============================================================
-# CRIAR NOVO WORKER
-#
-# Deve ser chamada enquanto worker_lock está bloqueado.
+# CRIAR WORKER
 # ============================================================
 
 def criar_worker_sem_lock():
@@ -605,6 +1011,7 @@ def criar_worker_sem_lock():
         CONTEXTO_MP.Queue()
     )
 
+
     worker_fila_resultados = (
         CONTEXTO_MP.Queue()
     )
@@ -613,14 +1020,15 @@ def criar_worker_sem_lock():
     worker_processo = (
         CONTEXTO_MP.Process(
 
-            target=worker_whisper,
+            target=
+                worker_whisper,
 
             args=(
                 worker_fila_comandos,
                 worker_fila_resultados
             ),
 
-            daemon=True
+            daemon=False
         )
     )
 
@@ -634,7 +1042,8 @@ def criar_worker_sem_lock():
         "Novo processo do Whisper iniciado."
     )
     print(
-        f"PID: {worker_processo.pid}"
+        f"PID: "
+        f"{worker_processo.pid}"
     )
     print("=" * 60)
     print()
@@ -660,10 +1069,7 @@ def iniciar_worker():
 
 
 # ============================================================
-# GARANTIR WORKER ATIVO
-#
-# Retorna referências locais para evitar problemas caso
-# o worker seja substituído durante um cancelamento.
+# OBTER WORKER ATIVO
 # ============================================================
 
 def obter_worker_ativo():
@@ -684,11 +1090,9 @@ def obter_worker_ativo():
             print(
                 "Worker não estava ativo."
             )
-
             print(
                 "Criando novo worker..."
             )
-
             print()
 
 
@@ -703,10 +1107,7 @@ def obter_worker_ativo():
 
 
 # ============================================================
-# ENCERRAR ÁRVORE DO PROCESSO
-#
-# No Windows usamos TASKKILL /T /F para encerrar também
-# subprocessos filhos, como um FFmpeg ainda ativo.
+# ENCERRAR PROCESSO DO WORKER
 # ============================================================
 
 def encerrar_processo_worker(
@@ -728,16 +1129,13 @@ def encerrar_processo_worker(
 
     print()
     print(
-        f"Encerrando worker PID {pid}..."
+        f"Encerrando worker PID "
+        f"{pid}..."
     )
     print()
 
 
     try:
-
-        # ====================================================
-        # WINDOWS
-        # ====================================================
 
         if os.name == "nt":
 
@@ -745,19 +1143,19 @@ def encerrar_processo_worker(
                 [
                     "taskkill",
                     "/PID",
-                    str(pid),
+                    str(
+                        pid
+                    ),
                     "/T",
                     "/F"
                 ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=
+                    subprocess.DEVNULL,
+                stderr=
+                    subprocess.DEVNULL,
                 check=False
             )
 
-
-        # ====================================================
-        # OUTROS SISTEMAS
-        # ====================================================
 
         else:
 
@@ -768,10 +1166,6 @@ def encerrar_processo_worker(
             timeout=3
         )
 
-
-        # ====================================================
-        # GARANTIA EXTRA
-        # ====================================================
 
         if processo.is_alive():
 
@@ -797,11 +1191,11 @@ def encerrar_processo_worker(
         print(
             "Erro ao encerrar worker:"
         )
-
         print(
-            str(erro)
+            str(
+                erro
+            )
         )
-
         print()
 
 
@@ -816,8 +1210,6 @@ def encerrar_processo_worker(
 
 # ============================================================
 # REINICIAR WORKER
-#
-# Usado após cancelamento imediato.
 # ============================================================
 
 def reiniciar_worker():
@@ -848,7 +1240,8 @@ def reiniciar_worker():
 
         print()
         print(
-            "Criando novo worker após cancelamento..."
+            "Criando novo worker "
+            "após cancelamento..."
         )
         print()
 
@@ -857,7 +1250,7 @@ def reiniciar_worker():
 
 
 # ============================================================
-# ENCERRAR WORKER AO FECHAR APLICAÇÃO
+# ENCERRAR WORKER AO FECHAR
 # ============================================================
 
 def encerrar_worker_final():
@@ -870,38 +1263,40 @@ def encerrar_worker_final():
         with worker_lock:
 
             if (
-                worker_processo is not None
-                and worker_processo.is_alive()
+                worker_processo is None
+                or not worker_processo.is_alive()
             ):
 
-                try:
-
-                    if (
-                        worker_fila_comandos
-                        is not None
-                    ):
-
-                        worker_fila_comandos.put(
-                            None
-                        )
-
-                except Exception:
-
-                    pass
+                return
 
 
-                worker_processo.join(
-                    timeout=2
-                )
-
+            try:
 
                 if (
-                    worker_processo.is_alive()
+                    worker_fila_comandos
+                    is not None
                 ):
 
-                    encerrar_processo_worker(
-                        worker_processo
+                    worker_fila_comandos.put(
+                        None
                     )
+
+
+            except Exception:
+
+                pass
+
+
+            worker_processo.join(
+                timeout=2
+            )
+
+
+            if worker_processo.is_alive():
+
+                encerrar_processo_worker(
+                    worker_processo
+                )
 
 
     except Exception:
@@ -910,7 +1305,7 @@ def encerrar_worker_final():
 
 
 # ============================================================
-# NORMALIZAR NOME DO ARQUIVO
+# NORMALIZAR NOME
 # ============================================================
 
 def normalizar_nome_arquivo(
@@ -938,10 +1333,6 @@ def normalizar_nome_arquivo(
 
 # ============================================================
 # EXCLUIR UPLOAD TEMPORÁRIO
-#
-# O áudio/vídeo existe em "uploads" somente enquanto está
-# sendo processado. Ao concluir, falhar ou ser cancelado,
-# tentamos removê-lo com segurança.
 # ============================================================
 
 def excluir_upload_temporario(
@@ -979,16 +1370,19 @@ def excluir_upload_temporario(
         print()
         print("!" * 60)
         print(
-            "Não foi possível remover o upload temporário."
+            "Não foi possível remover "
+            "o upload temporário."
         )
         print(
             "O arquivo ainda pode estar em uso."
         )
         print(
-            f"Caminho: {caminho_arquivo}"
+            f"Caminho: "
+            f"{caminho_arquivo}"
         )
         print(
-            f"Mensagem: {str(erro)}"
+            f"Mensagem: "
+            f"{str(erro)}"
         )
         print("!" * 60)
         print()
@@ -1002,13 +1396,16 @@ def excluir_upload_temporario(
             "Erro ao remover upload temporário."
         )
         print(
-            f"Caminho: {caminho_arquivo}"
+            f"Caminho: "
+            f"{caminho_arquivo}"
         )
         print(
-            f"Tipo: {type(erro).__name__}"
+            f"Tipo: "
+            f"{type(erro).__name__}"
         )
         print(
-            f"Mensagem: {str(erro)}"
+            f"Mensagem: "
+            f"{str(erro)}"
         )
         print("!" * 60)
         print()
@@ -1016,10 +1413,6 @@ def excluir_upload_temporario(
 
 # ============================================================
 # LIMPAR UPLOADS ÓRFÃOS
-#
-# Se o programa for fechado abruptamente durante uma
-# transcrição, algum arquivo pode permanecer em "uploads".
-# Na próxima inicialização, esses arquivos são removidos.
 # ============================================================
 
 def limpar_uploads_orfaos():
@@ -1062,13 +1455,15 @@ def limpar_uploads_orfaos():
 
                 print()
                 print(
-                    "Não foi possível remover um upload órfão:"
+                    "Não foi possível remover "
+                    "um upload órfão:"
                 )
                 print(
                     caminho
                 )
                 print(
-                    f"Mensagem: {str(erro)}"
+                    f"Mensagem: "
+                    f"{str(erro)}"
                 )
                 print()
 
@@ -1077,8 +1472,9 @@ def limpar_uploads_orfaos():
 
             print()
             print(
-                f"Limpeza inicial: {removidos} "
-                f"upload(s) temporário(s) removido(s)."
+                f"Limpeza inicial: "
+                f"{removidos} upload(s) "
+                f"temporário(s) removido(s)."
             )
             print()
 
@@ -1087,16 +1483,18 @@ def limpar_uploads_orfaos():
 
         print()
         print(
-            "Falha ao verificar uploads temporários antigos."
+            "Falha ao verificar uploads "
+            "temporários antigos."
         )
         print(
-            f"Mensagem: {str(erro)}"
+            f"Mensagem: "
+            f"{str(erro)}"
         )
         print()
 
 
 # ============================================================
-# VALIDAR UPLOAD SALVO
+# VALIDAR UPLOAD
 # ============================================================
 
 def validar_upload_salvo(
@@ -1108,7 +1506,8 @@ def validar_upload_salvo(
     ):
 
         raise RuntimeError(
-            "O arquivo enviado não pôde ser salvo corretamente."
+            "O arquivo enviado não pôde "
+            "ser salvo corretamente."
         )
 
 
@@ -1125,10 +1524,26 @@ def validar_upload_salvo(
 
 
 # ============================================================
+# VERIFICAR EXTENSÃO
+# ============================================================
+
+def arquivo_permitido(
+    nome_arquivo
+):
+
+    extensao = os.path.splitext(
+        nome_arquivo
+    )[1].lower()
+
+
+    return (
+        extensao
+        in EXTENSOES_PERMITIDAS
+    )
+
+
+# ============================================================
 # MENSAGEM DE ERRO AMIGÁVEL
-#
-# O terminal continua exibindo o erro técnico completo.
-# Para a interface, retornamos uma mensagem mais clara.
 # ============================================================
 
 def obter_mensagem_erro_amigavel(
@@ -1140,7 +1555,9 @@ def obter_mensagem_erro_amigavel(
     ).strip()
 
 
-    mensagem = mensagem_original.lower()
+    mensagem = (
+        mensagem_original.lower()
+    )
 
 
     if isinstance(
@@ -1161,7 +1578,8 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "O arquivo enviado está vazio e não pode ser transcrito."
+            "O arquivo enviado está vazio "
+            "e não pode ser transcrito."
         )
 
 
@@ -1171,8 +1589,8 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "Não foi possível salvar o arquivo temporariamente "
-            "para iniciar a transcrição."
+            "Não foi possível salvar o arquivo "
+            "temporariamente para iniciar a transcrição."
         )
 
 
@@ -1182,7 +1600,8 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "Não foi possível identificar fala suficiente neste arquivo."
+            "Não foi possível identificar fala "
+            "suficiente neste arquivo."
         )
 
 
@@ -1192,8 +1611,10 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "O mecanismo de transcrição foi interrompido inesperadamente. "
-            "Ele foi reiniciado; tente transcrever este arquivo novamente."
+            "O mecanismo de transcrição foi "
+            "interrompido inesperadamente. "
+            "Ele foi reiniciado; tente transcrever "
+            "este arquivo novamente."
         )
 
 
@@ -1229,7 +1650,8 @@ def obter_mensagem_erro_amigavel(
 
         return (
             "Não foi possível ler o áudio ou vídeo. "
-            "O arquivo pode estar corrompido ou em um formato incompatível."
+            "O arquivo pode estar corrompido "
+            "ou em um formato incompatível."
         )
 
 
@@ -1241,7 +1663,8 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "Não há espaço suficiente em disco para concluir a operação."
+            "Não há espaço suficiente em disco "
+            "para concluir a operação."
         )
 
 
@@ -1251,7 +1674,8 @@ def obter_mensagem_erro_amigavel(
     ):
 
         return (
-            "O Whisper encontrou um erro interno ao analisar este arquivo. "
+            "O Whisper encontrou um erro interno "
+            "ao analisar este arquivo. "
             "Tente novamente ou utilize outro arquivo."
         )
 
@@ -1259,32 +1683,15 @@ def obter_mensagem_erro_amigavel(
     if not mensagem_original:
 
         return (
-            "Ocorreu um erro inesperado durante o processamento."
+            "Ocorreu um erro inesperado "
+            "durante o processamento."
         )
 
 
     return (
-        "Não foi possível concluir a transcrição deste arquivo. "
-        "Consulte o terminal para os detalhes técnicos."
-    )
-
-
-# ============================================================
-# VERIFICAR EXTENSÃO
-# ============================================================
-
-def arquivo_permitido(
-    nome_arquivo
-):
-
-    extensao = os.path.splitext(
-        nome_arquivo
-    )[1].lower()
-
-
-    return (
-        extensao
-        in EXTENSOES_PERMITIDAS
+        "Não foi possível concluir a transcrição "
+        "deste arquivo. Consulte o terminal "
+        "para os detalhes técnicos."
     )
 
 
@@ -1313,7 +1720,9 @@ def limpar_texto(
         if (
             caractere == "\n"
             or caractere == "\t"
-            or ord(caractere) >= 32
+            or ord(
+                caractere
+            ) >= 32
         )
     )
 
@@ -1372,7 +1781,7 @@ def preservar_caixa(
 
 
 # ============================================================
-# CORRIGIR TEXTO SEGURO
+# CORREÇÃO SEGURA
 # ============================================================
 
 def corrigir_texto_seguro(
@@ -1391,11 +1800,15 @@ def corrigir_texto_seguro(
 
 
         texto = padrao.sub(
+
             lambda correspondencia:
                 preservar_caixa(
-                    correspondencia.group(0),
+                    correspondencia.group(
+                        0
+                    ),
                     correto
                 ),
+
             texto
         )
 
@@ -1456,13 +1869,17 @@ def criar_paragrafos(
 
     for indice in range(
         0,
-        len(frases),
+        len(
+            frases
+        ),
         frases_por_paragrafo
     ):
 
         grupo = frases[
             indice:
-            indice + frases_por_paragrafo
+            indice
+            +
+            frases_por_paragrafo
         ]
 
 
@@ -1506,7 +1923,7 @@ def tratar_texto(
 
 
 # ============================================================
-# ADICIONAR NÚMERO DE PÁGINA
+# NÚMERO DE PÁGINA
 # ============================================================
 
 def adicionar_numero_pagina(
@@ -1520,8 +1937,11 @@ def adicionar_numero_pagina(
         "w:fldChar"
     )
 
+
     inicio_campo.set(
-        qn("w:fldCharType"),
+        qn(
+            "w:fldCharType"
+        ),
         "begin"
     )
 
@@ -1530,10 +1950,14 @@ def adicionar_numero_pagina(
         "w:instrText"
     )
 
+
     instrucao.set(
-        qn("xml:space"),
+        qn(
+            "xml:space"
+        ),
         "preserve"
     )
+
 
     instrucao.text = "PAGE"
 
@@ -1542,8 +1966,11 @@ def adicionar_numero_pagina(
         "w:fldChar"
     )
 
+
     separador.set(
-        qn("w:fldCharType"),
+        qn(
+            "w:fldCharType"
+        ),
         "separate"
     )
 
@@ -1552,8 +1979,11 @@ def adicionar_numero_pagina(
         "w:fldChar"
     )
 
+
     fim_campo.set(
-        qn("w:fldCharType"),
+        qn(
+            "w:fldCharType"
+        ),
         "end"
     )
 
@@ -1562,13 +1992,16 @@ def adicionar_numero_pagina(
         inicio_campo
     )
 
+
     run._r.append(
         instrucao
     )
 
+
     run._r.append(
         separador
     )
+
 
     run._r.append(
         fim_campo
@@ -1577,7 +2010,9 @@ def adicionar_numero_pagina(
 
     run.font.name = "Arial"
 
-    run.font.size = Pt(8)
+    run.font.size = Pt(
+        8
+    )
 
 
 # ============================================================
@@ -1590,11 +2025,16 @@ def adicionar_borda_inferior(
 
     p = paragrafo._p
 
-    pPr = p.get_or_add_pPr()
+
+    pPr = (
+        p.get_or_add_pPr()
+    )
 
 
     pBdr = pPr.find(
-        qn("w:pBdr")
+        qn(
+            "w:pBdr"
+        )
     )
 
 
@@ -1603,6 +2043,7 @@ def adicionar_borda_inferior(
         pBdr = OxmlElement(
             "w:pBdr"
         )
+
 
         pPr.append(
             pBdr
@@ -1615,22 +2056,33 @@ def adicionar_borda_inferior(
 
 
     bottom.set(
-        qn("w:val"),
+        qn(
+            "w:val"
+        ),
         "single"
     )
 
+
     bottom.set(
-        qn("w:sz"),
+        qn(
+            "w:sz"
+        ),
         "6"
     )
 
+
     bottom.set(
-        qn("w:space"),
+        qn(
+            "w:space"
+        ),
         "4"
     )
 
+
     bottom.set(
-        qn("w:color"),
+        qn(
+            "w:color"
+        ),
         "B7B7B7"
     )
 
@@ -1641,7 +2093,7 @@ def adicionar_borda_inferior(
 
 
 # ============================================================
-# CONFIGURAR FONTE
+# FONTE
 # ============================================================
 
 def configurar_run(
@@ -1660,14 +2112,7 @@ def configurar_run(
 
 
 # ============================================================
-# GERAR NOME ÚNICO PARA O WORD
-#
-# Evita sobrescrever uma transcrição já existente.
-#
-# Exemplo:
-# Aula 1.docx
-# Aula 1 (2).docx
-# Aula 1 (3).docx
+# NOME ÚNICO PARA WORD
 # ============================================================
 
 def gerar_nome_docx_unico(
@@ -1676,7 +2121,8 @@ def gerar_nome_docx_unico(
 
     nome_docx = (
         nome_sem_extensao
-        + ".docx"
+        +
+        ".docx"
     )
 
 
@@ -1702,7 +2148,8 @@ def gerar_nome_docx_unico(
     while True:
 
         nome_docx = (
-            f"{nome_sem_extensao} ({contador}).docx"
+            f"{nome_sem_extensao} "
+            f"({contador}).docx"
         )
 
 
@@ -1726,7 +2173,7 @@ def gerar_nome_docx_unico(
 
 
 # ============================================================
-# CRIAR DOCUMENTO WORD
+# CRIAR WORD
 # ============================================================
 
 def criar_documento_word(
@@ -1738,36 +2185,46 @@ def criar_documento_word(
     documento = Document()
 
 
-    # ========================================================
-    # PÁGINA
-    # ========================================================
-
-    secao = documento.sections[0]
+    secao = documento.sections[
+        0
+    ]
 
 
-    secao.top_margin = Cm(2.5)
+    secao.top_margin = Cm(
+        2.5
+    )
 
-    secao.bottom_margin = Cm(2.5)
+    secao.bottom_margin = Cm(
+        2.5
+    )
 
-    secao.left_margin = Cm(3)
+    secao.left_margin = Cm(
+        3
+    )
 
-    secao.right_margin = Cm(2)
+    secao.right_margin = Cm(
+        2
+    )
 
 
-    secao.header_distance = Cm(1.2)
+    secao.header_distance = Cm(
+        1.2
+    )
 
-    secao.footer_distance = Cm(1.2)
+    secao.footer_distance = Cm(
+        1.2
+    )
 
 
-    # ========================================================
-    # CABEÇALHO
-    # ========================================================
-
-    cabecalho = secao.header
+    cabecalho = (
+        secao.header
+    )
 
 
     paragrafo_cabecalho = (
-        cabecalho.paragraphs[0]
+        cabecalho.paragraphs[
+            0
+        ]
     )
 
 
@@ -1776,8 +2233,10 @@ def criar_documento_word(
     )
 
 
-    run = paragrafo_cabecalho.add_run(
-        "Transcrição em Texto"
+    run = (
+        paragrafo_cabecalho.add_run(
+            "Transcrição em Texto"
+        )
     )
 
 
@@ -1788,15 +2247,15 @@ def criar_documento_word(
     )
 
 
-    # ========================================================
-    # RODAPÉ
-    # ========================================================
-
-    rodape = secao.footer
+    rodape = (
+        secao.footer
+    )
 
 
     paragrafo_rodape = (
-        rodape.paragraphs[0]
+        rodape.paragraphs[
+            0
+        ]
     )
 
 
@@ -1805,8 +2264,10 @@ def criar_documento_word(
     )
 
 
-    run = paragrafo_rodape.add_run(
-        "Transcrição automática • Página "
+    run = (
+        paragrafo_rodape.add_run(
+            "Transcrição automática • Página "
+        )
     )
 
 
@@ -1821,11 +2282,9 @@ def criar_documento_word(
     )
 
 
-    # ========================================================
-    # TÍTULO
-    # ========================================================
-
-    titulo = documento.add_paragraph()
+    titulo = (
+        documento.add_paragraph()
+    )
 
 
     titulo.alignment = (
@@ -1850,11 +2309,9 @@ def criar_documento_word(
     )
 
 
-    # ========================================================
-    # SUBTÍTULO
-    # ========================================================
-
-    subtitulo = documento.add_paragraph()
+    subtitulo = (
+        documento.add_paragraph()
+    )
 
 
     subtitulo.alignment = (
@@ -1879,29 +2336,33 @@ def criar_documento_word(
     )
 
 
-    # ========================================================
-    # METADADOS
-    # ========================================================
-
-    nome_sem_extensao = os.path.splitext(
-        arquivo_original
-    )[0]
+    nome_sem_extensao = (
+        os.path.splitext(
+            arquivo_original
+        )[0]
+    )
 
 
     agora = datetime.now()
 
 
-    data_formatada = agora.strftime(
-        "%d/%m/%Y"
+    data_formatada = (
+        agora.strftime(
+            "%d/%m/%Y"
+        )
     )
 
 
-    hora_formatada = agora.strftime(
-        "%H:%M"
+    hora_formatada = (
+        agora.strftime(
+            "%H:%M"
+        )
     )
 
 
-    metadados = documento.add_paragraph()
+    metadados = (
+        documento.add_paragraph()
+    )
 
 
     metadados.paragraph_format.space_after = Pt(
@@ -1910,7 +2371,8 @@ def criar_documento_word(
 
 
     run = metadados.add_run(
-        f"Arquivo original: {nome_sem_extensao}\n"
+        f"Arquivo original: "
+        f"{nome_sem_extensao}\n"
     )
 
 
@@ -1934,7 +2396,8 @@ def criar_documento_word(
 
     run = metadados.add_run(
         f"Gerado em: "
-        f"{data_formatada} às {hora_formatada}"
+        f"{data_formatada} "
+        f"às {hora_formatada}"
     )
 
 
@@ -1948,10 +2411,6 @@ def criar_documento_word(
         metadados
     )
 
-
-    # ========================================================
-    # TEXTO
-    # ========================================================
 
     paragrafos = texto.split(
         "\n\n"
@@ -2015,7 +2474,7 @@ def criar_documento_word(
 
 
 # ============================================================
-# ENVIAR TAREFA AO WORKER E AGUARDAR
+# EXECUTAR TRANSCRIÇÃO NO WORKER
 # ============================================================
 
 def executar_transcricao_worker(
@@ -2027,20 +2486,12 @@ def executar_transcricao_worker(
     global evento_cancelamento_ativo
 
 
-    # ========================================================
-    # OBTÉM O WORKER ATUAL
-    # ========================================================
-
     (
         processo_local,
         fila_comandos_local,
         fila_resultados_local
     ) = obter_worker_ativo()
 
-
-    # ========================================================
-    # CRIA ID ÚNICO
-    # ========================================================
 
     tarefa_id = str(
         uuid.uuid4()
@@ -2052,24 +2503,17 @@ def executar_transcricao_worker(
     )
 
 
-    # ========================================================
-    # REGISTRA COMO TAREFA ATIVA
-    # ========================================================
-
     with estado_lock:
 
         tarefa_ativa_id = (
             tarefa_id
         )
 
+
         evento_cancelamento_ativo = (
             evento_cancelamento
         )
 
-
-    # ========================================================
-    # ENVIA PARA O WORKER
-    # ========================================================
 
     fila_comandos_local.put(
         {
@@ -2087,25 +2531,15 @@ def executar_transcricao_worker(
 
     print()
     print(
-        f"Tarefa enviada ao worker: {tarefa_id}"
+        f"Tarefa enviada ao worker: "
+        f"{tarefa_id}"
     )
     print()
 
 
     try:
 
-        # ====================================================
-        # AGUARDA RESULTADO
-        #
-        # Usamos pequenos timeouts para poder perceber
-        # imediatamente quando /cancelar for chamado.
-        # ====================================================
-
         while True:
-
-            # =================================================
-            # CANCELAMENTO SOLICITADO
-            # =================================================
 
             if (
                 evento_cancelamento.is_set()
@@ -2114,7 +2548,8 @@ def executar_transcricao_worker(
                 print()
                 print("=" * 60)
                 print(
-                    f"Tarefa cancelada: {tarefa_id}"
+                    f"Tarefa cancelada: "
+                    f"{tarefa_id}"
                 )
                 print("=" * 60)
                 print()
@@ -2132,15 +2567,10 @@ def executar_transcricao_worker(
                 }
 
 
-            # =================================================
-            # WORKER MORREU INESPERADAMENTE
-            # =================================================
-
             if (
                 not processo_local.is_alive()
             ):
 
-                # Se houve cancelamento, isso é normal.
                 if (
                     evento_cancelamento.is_set()
                 ):
@@ -2162,7 +2592,8 @@ def executar_transcricao_worker(
                     "Worker encerrado inesperadamente."
                 )
                 print(
-                    "Tentando preparar um novo worker..."
+                    "Tentando preparar "
+                    "um novo worker..."
                 )
                 print()
 
@@ -2175,10 +2606,13 @@ def executar_transcricao_worker(
 
                     print()
                     print(
-                        "Falha ao reiniciar o worker:"
+                        "Falha ao reiniciar "
+                        "o worker:"
                     )
                     print(
-                        str(erro_reinicio)
+                        str(
+                            erro_reinicio
+                        )
                     )
                     print()
 
@@ -2195,10 +2629,6 @@ def executar_transcricao_worker(
                 }
 
 
-            # =================================================
-            # VERIFICAR RESULTADO
-            # =================================================
-
             try:
 
                 resposta = (
@@ -2213,15 +2643,12 @@ def executar_transcricao_worker(
                 continue
 
 
-            # =================================================
-            # IGNORA RESULTADO QUE NÃO SEJA DA TAREFA ATUAL
-            # =================================================
-
             if (
                 resposta.get(
                     "tarefa_id"
                 )
-                != tarefa_id
+                !=
+                tarefa_id
             ):
 
                 continue
@@ -2232,15 +2659,12 @@ def executar_transcricao_worker(
 
     finally:
 
-        # ====================================================
-        # LIMPA ESTADO ATIVO
-        # ====================================================
-
         with estado_lock:
 
             if (
                 tarefa_ativa_id
-                == tarefa_id
+                ==
+                tarefa_id
             ):
 
                 tarefa_ativa_id = None
@@ -2261,7 +2685,7 @@ def index():
 
 
 # ============================================================
-# ROTA DE TRANSCRIÇÃO
+# TRANSCRIÇÃO
 # ============================================================
 
 @app.route(
@@ -2269,10 +2693,6 @@ def index():
     methods=["POST"]
 )
 def transcrever():
-
-    # ========================================================
-    # SOMENTE UMA TRANSCRIÇÃO POR VEZ
-    # ========================================================
 
     with processamento_lock:
 
@@ -2318,10 +2738,6 @@ def transcrever():
                 )
 
 
-                # =============================================
-                # NOME
-                # =============================================
-
                 if not nome_arquivo:
 
                     resultados.append(
@@ -2337,12 +2753,9 @@ def transcrever():
                         }
                     )
 
+
                     continue
 
-
-                # =============================================
-                # EXTENSÃO
-                # =============================================
 
                 if not arquivo_permitido(
                     nome_arquivo
@@ -2361,12 +2774,9 @@ def transcrever():
                         }
                     )
 
+
                     continue
 
-
-                # =============================================
-                # UPLOAD
-                # =============================================
 
                 caminho_arquivo = os.path.join(
                     PASTA_UPLOADS,
@@ -2411,10 +2821,6 @@ def transcrever():
                     print()
 
 
-                    # =========================================
-                    # WHISPER EM PROCESSO SEPARADO
-                    # =========================================
-
                     resposta_worker = (
                         executar_transcricao_worker(
                             caminho_arquivo,
@@ -2423,10 +2829,6 @@ def transcrever():
                     )
 
 
-                    # =========================================
-                    # CANCELADO
-                    # =========================================
-
                     if resposta_worker.get(
                         "cancelado",
                         False
@@ -2434,7 +2836,8 @@ def transcrever():
 
                         print()
                         print(
-                            f"Cancelado: {nome_arquivo}"
+                            f"Cancelado: "
+                            f"{nome_arquivo}"
                         )
                         print()
 
@@ -2456,17 +2859,8 @@ def transcrever():
                         )
 
 
-                        # =====================================
-                        # NÃO PROCESSA OUTROS ARQUIVOS DESTA
-                        # MESMA REQUISIÇÃO.
-                        # =====================================
-
                         break
 
-
-                    # =========================================
-                    # ERRO DO WORKER
-                    # =========================================
 
                     if not resposta_worker.get(
                         "sucesso",
@@ -2485,10 +2879,6 @@ def transcrever():
                             erro_worker
                         )
 
-
-                    # =========================================
-                    # TEXTO DO WHISPER
-                    # =========================================
 
                     texto_original = (
                         resposta_worker.get(
@@ -2516,10 +2906,6 @@ def transcrever():
                     print()
 
 
-                    # =========================================
-                    # TRATAMENTO
-                    # =========================================
-
                     texto_tratado = (
                         tratar_texto(
                             texto_original
@@ -2533,10 +2919,6 @@ def transcrever():
 
                     print()
 
-
-                    # =========================================
-                    # WORD
-                    # =========================================
 
                     nome_sem_extensao = (
                         os.path.splitext(
@@ -2663,15 +3045,6 @@ def transcrever():
 
                 finally:
 
-                    # =========================================
-                    # LIMPEZA DO UPLOAD TEMPORÁRIO
-                    #
-                    # Executa em qualquer cenário:
-                    # - sucesso
-                    # - erro
-                    # - cancelamento
-                    # =========================================
-
                     excluir_upload_temporario(
                         caminho_arquivo
                     )
@@ -2738,7 +3111,7 @@ def transcrever():
 
 
 # ============================================================
-# CANCELAR TRANSCRIÇÃO ATUAL
+# CANCELAMENTO
 # ============================================================
 
 @app.route(
@@ -2753,15 +3126,12 @@ def cancelar():
 
     try:
 
-        # ====================================================
-        # VERIFICA SE EXISTE TAREFA ATIVA
-        # ====================================================
-
         with estado_lock:
 
             tarefa_id = (
                 tarefa_ativa_id
             )
+
 
             evento = (
                 evento_cancelamento_ativo
@@ -2793,22 +3163,15 @@ def cancelar():
             "CANCELAMENTO IMEDIATO SOLICITADO"
         )
         print(
-            f"Tarefa: {tarefa_id}"
+            f"Tarefa: "
+            f"{tarefa_id}"
         )
         print("!" * 60)
         print()
 
 
-        # ====================================================
-        # AVISA A ROTA /transcrever
-        # ====================================================
-
         evento.set()
 
-
-        # ====================================================
-        # MATA O PROCESSO DO WHISPER E CRIA OUTRO
-        # ====================================================
 
         reiniciar_worker()
 
@@ -2871,7 +3234,9 @@ def cancelar():
                     False,
 
                 "mensagem":
-                    str(erro)
+                    str(
+                        erro
+                    )
             }
         ), 500
 
@@ -2898,14 +3263,38 @@ def download(
 
 
 # ============================================================
+# ABRIR NAVEGADOR
+# ============================================================
+
+def abrir_navegador_aplicacao():
+
+    try:
+
+        webbrowser.open(
+            "http://localhost:5000",
+            new=1
+        )
+
+
+    except Exception as erro:
+
+        print()
+        print(
+            "Não foi possível abrir "
+            "o navegador automaticamente."
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro)}"
+        )
+        print()
+
+
+# ============================================================
 # EXECUTAR
 # ============================================================
 
 if __name__ == "__main__":
-
-    # ========================================================
-    # IMPORTANTE PARA WINDOWS
-    # ========================================================
 
     multiprocessing.freeze_support()
 
@@ -2925,27 +3314,77 @@ if __name__ == "__main__":
     print(
         "Cancelamento imediato: ATIVADO"
     )
+    print(
+        "Threads OpenMP/MKL: 1"
+    )
+    print(
+        "Modo: "
+        +
+        (
+            "Executável Windows"
+            if MODO_EXECUTAVEL
+            else
+            "Python"
+        )
+    )
     print("=" * 60)
     print()
 
 
-    # ========================================================
-    # LIMPA ARQUIVOS TEMPORÁRIOS DE EXECUÇÕES INTERROMPIDAS
-    # ========================================================
+    print(
+        f"Pasta de recursos: "
+        f"{PASTA_RECURSOS}"
+    )
+
+
+    print(
+        f"Pasta de dados: "
+        f"{PASTA_DADOS}"
+    )
+
+
+    print(
+        f"Transcrições: "
+        f"{PASTA_TRANSCRICOES}"
+    )
+
+
+    print()
+
+
+    if CAMINHO_FFMPEG:
+
+        print(
+            "FFmpeg encontrado:"
+        )
+
+
+        print(
+            CAMINHO_FFMPEG
+        )
+
+
+    else:
+
+        print(
+            "ATENÇÃO: FFmpeg não foi encontrado."
+        )
+
+
+        print(
+            "A transcrição não funcionará "
+            "até que o FFmpeg esteja disponível."
+        )
+
+
+    print()
+
 
     limpar_uploads_orfaos()
 
 
-    # ========================================================
-    # INICIA O WORKER DO WHISPER
-    # ========================================================
-
     iniciar_worker()
 
-
-    # ========================================================
-    # ENCERRAMENTO SEGURO
-    # ========================================================
 
     atexit.register(
         encerrar_worker_final
@@ -2958,17 +3397,47 @@ if __name__ == "__main__":
         "Servidor iniciado."
     )
     print(
-        "Acesse: http://127.0.0.1:5000"
+        "Acesse: "
+        "http://localhost:5000"
     )
     print("=" * 60)
     print()
 
 
+    if MODO_EXECUTAVEL:
+
+        temporizador_navegador = (
+            threading.Timer(
+
+                1.5,
+
+                abrir_navegador_aplicacao
+            )
+        )
+
+
+        temporizador_navegador.daemon = (
+            True
+        )
+
+
+        temporizador_navegador.start()
+
+
     app.run(
 
-        debug=True,
+        host=
+            "127.0.0.1",
 
-        use_reloader=False,
+        port=
+            5000,
 
-        threaded=True
+        debug=
+            not MODO_EXECUTAVEL,
+
+        use_reloader=
+            False,
+
+        threaded=
+            True
     )
