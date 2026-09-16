@@ -1,0 +1,232 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      # ======================================================
+      # CÓDIGO-FONTE
+      # ======================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ======================================================
+      # PYTHON
+      # ======================================================
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+
+      # ======================================================
+      # DEPENDÊNCIAS PYTHON
+      # ======================================================
+
+      - name: Upgrade pip
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-windows-exe.txt
+
+
+      # ======================================================
+      # VALIDAR PYTORCH
+      # ======================================================
+
+      - name: Validate PyTorch
+        shell: pwsh
+        run: |
+          python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.cuda.is_available())"
+
+          $versaoTorch = python -c "import torch; print(torch.__version__)"
+
+          if ($versaoTorch.Trim() -ne "2.8.0+cpu") {
+              throw "Versão inesperada do PyTorch: $versaoTorch"
+          }
+
+
+      # ======================================================
+      # FFMPEG
+      # ======================================================
+
+      - name: Install FFmpeg 8.1
+        shell: pwsh
+        run: |
+          choco install ffmpeg --version=8.1.0 -y --no-progress
+
+
+      - name: Locate FFmpeg
+        id: ffmpeg
+        shell: pwsh
+        run: |
+          $ffmpeg = (Get-Command ffmpeg.exe).Source
+
+          if (-not (Test-Path $ffmpeg)) {
+              throw "FFmpeg não encontrado."
+          }
+
+          Write-Host "FFmpeg encontrado em:"
+          Write-Host $ffmpeg
+
+          ffmpeg -version
+
+          "path=$ffmpeg" >> $env:GITHUB_OUTPUT
+
+
+      # ======================================================
+      # PYINSTALLER
+      # ======================================================
+
+      - name: Build application with PyInstaller
+        shell: pwsh
+        run: |
+          $ffmpeg = "${{ steps.ffmpeg.outputs.path }}"
+
+          python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --name "Transcricao em Texto" `
+            --runtime-hook "rthook_torch_windows.py" `
+            --add-data "templates;templates" `
+            --add-data "static;static" `
+            --add-binary "$ffmpeg;ffmpeg\bin" `
+            --collect-all whisper `
+            app.py
+
+
+      # ======================================================
+      # VALIDAR BUILD
+      # ======================================================
+
+      - name: Validate application build
+        shell: pwsh
+        run: |
+          $exe = ".\dist\Transcricao em Texto\Transcricao em Texto.exe"
+
+          if (-not (Test-Path $exe)) {
+              throw "Executável não foi criado."
+          }
+
+          Write-Host "Executável criado:"
+          Get-Item $exe
+
+
+      # ======================================================
+      # INNO SETUP 7.1.0
+      # ======================================================
+
+      - name: Download Inno Setup 7.1.0
+        shell: pwsh
+        run: |
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
+
+          Invoke-WebRequest `
+            -Uri $url `
+            -OutFile ".\innosetup-7.1.0-x64.exe"
+
+
+      - name: Validate Inno Setup signature
+        shell: pwsh
+        run: |
+          $assinatura = Get-AuthenticodeSignature ".\innosetup-7.1.0-x64.exe"
+
+          Write-Host "Status da assinatura:"
+          Write-Host $assinatura.Status
+
+          Write-Host "Fornecedor:"
+          Write-Host $assinatura.SignerCertificate.Subject
+
+          if ($assinatura.Status -ne "Valid") {
+              throw "A assinatura digital do instalador do Inno Setup não é válida."
+          }
+
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          Start-Process `
+            -FilePath ".\innosetup-7.1.0-x64.exe" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
+            -Wait
+
+
+      # ======================================================
+      # GERAR INSTALADOR
+      # ======================================================
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+
+          if (-not (Test-Path $iscc)) {
+              throw "ISCC.exe não encontrado."
+          }
+
+          & $iscc ".\installer.iss"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Falha ao gerar o instalador."
+          }
+
+
+      # ======================================================
+      # VALIDAR INSTALADOR
+      # ======================================================
+
+      - name: Validate installer
+        shell: pwsh
+        run: |
+          $setup = ".\installer-output\TranscricaoEmTexto-Setup.exe"
+
+          if (-not (Test-Path $setup)) {
+              throw "Instalador não foi criado."
+          }
+
+          Write-Host "Instalador criado:"
+          Get-Item $setup
+
+          $hash = Get-FileHash `
+            -Path $setup `
+            -Algorithm SHA256
+
+          Write-Host ""
+          Write-Host "SHA256:"
+          Write-Host $hash.Hash
+
+
+      # ======================================================
+      # ARTEFATO DO GITHUB
+      # ======================================================
+
+      - name: Upload unsigned installer
+        id: upload-unsigned-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TranscricaoEmTexto-Windows-Unsigned
+          path: installer-output/TranscricaoEmTexto-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
