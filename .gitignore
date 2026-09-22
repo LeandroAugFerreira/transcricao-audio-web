@@ -34,6 +34,20 @@ ENV/
 .env.*
 !.env.example
 
+# Chaves locais utilizadas pela aplicação.
+sessao_key
+sessao.key
+
+
+# ============================================================
+# BANCO DE DADOS LOCAL
+# ============================================================
+
+# O banco contém usuários, histórico e dados locais.
+*.db
+*.sqlite
+*.sqlite3
+
 
 # ============================================================
 # PYINSTALLER
@@ -42,6 +56,9 @@ ENV/
 build/
 dist/
 *.spec
+
+# Este SPEC faz parte oficialmente do processo de build.
+!Transcricao em Texto.spec
 
 
 # ============================================================
@@ -87,14 +104,16 @@ transcricoes/*
 
 
 # ============================================================
-# DOCUMENTOS GERADOS
+# DOCUMENTOS / TEXTOS GERADOS
 # ============================================================
 
 *.docx
 *.txt
 
+# Arquivos TXT que fazem parte oficialmente do projeto.
 !requirements.txt
 !requirements-windows-exe.txt
+!version_info.txt
 
 
 # ============================================================

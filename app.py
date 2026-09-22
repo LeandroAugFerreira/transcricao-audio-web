@@ -7,16 +7,22 @@ from flask import (
     render_template,
     request,
     jsonify,
-    send_from_directory
+    send_from_directory,
+    session,
+    redirect,
+    url_for
 )
 
 import atexit
 import multiprocessing
+import secrets
 import os
 import queue
 import re
 import shutil
+import sqlite3
 import subprocess
+import time
 import sys
 import threading
 import traceback
@@ -24,13 +30,19 @@ import unicodedata
 import uuid
 import webbrowser
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
 
 
 # ============================================================
@@ -211,6 +223,12 @@ PASTA_TRANSCRICOES = os.path.join(
 )
 
 
+CAMINHO_BANCO_HISTORICO = os.path.join(
+    PASTA_DADOS,
+    "historico.db"
+)
+
+
 os.makedirs(
     PASTA_UPLOADS,
     exist_ok=True
@@ -299,6 +317,1336 @@ app = Flask(
     static_folder=
         PASTA_STATIC
 )
+
+
+# ============================================================
+# SESSÃO E AUTENTICAÇÃO
+# ============================================================
+
+CAMINHO_CHAVE_SESSAO = os.path.join(
+    PASTA_DADOS,
+    "sessao.key"
+)
+
+
+def obter_chave_secreta():
+
+    try:
+
+        if os.path.isfile(
+            CAMINHO_CHAVE_SESSAO
+        ):
+
+            with open(
+                CAMINHO_CHAVE_SESSAO,
+                "r",
+                encoding="utf-8"
+            ) as arquivo:
+
+                chave = (
+                    arquivo.read()
+                    .strip()
+                )
+
+
+            if chave:
+
+                return chave
+
+
+        chave = secrets.token_hex(
+            32
+        )
+
+
+        with open(
+            CAMINHO_CHAVE_SESSAO,
+            "w",
+            encoding="utf-8"
+        ) as arquivo:
+
+            arquivo.write(
+                chave
+            )
+
+
+        return chave
+
+
+    except Exception:
+
+        # Fallback para não impedir a aplicação de abrir.
+        # Nesse caso, a sessão será perdida ao reiniciar.
+        return secrets.token_hex(
+            32
+        )
+
+
+app.config.update(
+    SECRET_KEY=
+        obter_chave_secreta(),
+
+    SESSION_COOKIE_HTTPONLY=
+        True,
+
+    SESSION_COOKIE_SAMESITE=
+        "Lax",
+
+    PERMANENT_SESSION_LIFETIME=
+        timedelta(
+            days=30
+        )
+)
+
+
+# ============================================================
+# BANCO DE DADOS DO HISTÓRICO
+#
+# O SQLite é utilizado para manter um histórico local das
+# transcrições mesmo depois que a aplicação é fechada.
+#
+# Em modo EXE:
+#
+# Documents\Transcrição em Texto\historico.db
+#
+# Em modo Python:
+#
+# historico.db na pasta do projeto.
+# ============================================================
+
+def conectar_banco_historico():
+
+    conexao = sqlite3.connect(
+        CAMINHO_BANCO_HISTORICO,
+        timeout=30
+    )
+
+
+    conexao.row_factory = (
+        sqlite3.Row
+    )
+
+
+    conexao.execute(
+        "PRAGMA busy_timeout = 5000"
+    )
+
+
+    return conexao
+
+
+# ============================================================
+# INICIALIZAR BANCO DO HISTÓRICO
+# ============================================================
+
+def inicializar_banco_historico():
+
+    try:
+
+        with conectar_banco_historico() as conexao:
+
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS historico_transcricoes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    arquivo_original TEXT NOT NULL,
+                    tamanho_bytes INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL,
+                    tempo_segundos INTEGER NOT NULL DEFAULT 0,
+                    transcricao TEXT,
+                    arquivo_docx TEXT,
+                    erro TEXT,
+                    criado_em TEXT NOT NULL,
+                    atualizado_em TEXT NOT NULL
+                )
+                """
+            )
+
+
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    usuario TEXT NOT NULL,
+                    senha_hash TEXT NOT NULL,
+                    perfil TEXT NOT NULL DEFAULT 'usuario',
+                    ativo INTEGER NOT NULL DEFAULT 1,
+                    criado_em TEXT NOT NULL,
+                    atualizado_em TEXT NOT NULL,
+                    ultimo_acesso TEXT
+                )
+                """
+            )
+
+
+            conexao.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                idx_usuarios_usuario_nocase
+                ON usuarios (
+                    usuario COLLATE NOCASE
+                )
+                """
+            )
+
+
+            conexao.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                idx_usuarios_email_nocase
+                ON usuarios (
+                    email COLLATE NOCASE
+                )
+                """
+            )
+
+
+            colunas_historico = {
+                registro[
+                    "name"
+                ]
+                for registro
+                in conexao.execute(
+                    """
+                    PRAGMA table_info(
+                        historico_transcricoes
+                    )
+                    """
+                ).fetchall()
+            }
+
+
+            if (
+                "usuario_id"
+                not in colunas_historico
+            ):
+
+                conexao.execute(
+                    """
+                    ALTER TABLE historico_transcricoes
+                    ADD COLUMN usuario_id INTEGER
+                    """
+                )
+
+
+            conexao.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_historico_usuario_id
+                ON historico_transcricoes (
+                    usuario_id
+                )
+                """
+            )
+
+
+            admin_legado = conexao.execute(
+                """
+                SELECT id
+                FROM usuarios
+                WHERE perfil = 'admin'
+                ORDER BY
+                    ativo DESC,
+                    id ASC
+                LIMIT 1
+                """
+            ).fetchone()
+
+
+            if (
+                admin_legado
+                is not None
+            ):
+
+                conexao.execute(
+                    """
+                    UPDATE historico_transcricoes
+                    SET usuario_id = ?
+                    WHERE usuario_id IS NULL
+                    """,
+                    (
+                        int(
+                            admin_legado[
+                                "id"
+                            ]
+                        ),
+                    )
+                )
+
+
+            conexao.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_historico_criado_em
+                ON historico_transcricoes (
+                    criado_em DESC
+                )
+                """
+            )
+
+
+            conexao.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_historico_status
+                ON historico_transcricoes (
+                    status
+                )
+                """
+            )
+
+
+            agora = datetime.now().isoformat(
+                timespec="seconds"
+            )
+
+
+            # Se a aplicação foi encerrada enquanto algum item
+            # estava em processamento, esse registro não deve
+            # permanecer indefinidamente como "transcrevendo".
+            conexao.execute(
+                """
+                UPDATE historico_transcricoes
+                SET
+                    status = 'erro',
+                    erro = CASE
+                        WHEN erro IS NULL OR TRIM(erro) = ''
+                        THEN ?
+                        ELSE erro
+                    END,
+                    atualizado_em = ?
+                WHERE status = 'transcrevendo'
+                """,
+                (
+                    (
+                        "O processamento foi interrompido "
+                        "antes de ser concluído."
+                    ),
+                    agora
+                )
+            )
+
+
+            conexao.commit()
+
+
+        print()
+        print(
+            "Banco do histórico pronto:"
+        )
+        print(
+            CAMINHO_BANCO_HISTORICO
+        )
+        print()
+
+
+        return True
+
+
+    except Exception as erro:
+
+        print()
+        print("!" * 60)
+        print(
+            "ERRO AO INICIALIZAR O HISTÓRICO"
+        )
+        print(
+            f"Tipo: "
+            f"{type(erro).__name__}"
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro)}"
+        )
+        print("!" * 60)
+        print()
+
+
+        return False
+
+
+# ============================================================
+# USUÁRIOS
+# ============================================================
+
+def contar_usuarios():
+
+    with conectar_banco_historico() as conexao:
+
+        resultado = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM usuarios
+            """
+        ).fetchone()
+
+
+    return int(
+        resultado[
+            "total"
+        ]
+    )
+
+
+def obter_usuario_por_id(
+    usuario_id
+):
+
+    if not usuario_id:
+
+        return None
+
+
+    with conectar_banco_historico() as conexao:
+
+        registro = conexao.execute(
+            """
+            SELECT
+                id,
+                nome,
+                email,
+                usuario,
+                senha_hash,
+                perfil,
+                ativo,
+                criado_em,
+                atualizado_em,
+                ultimo_acesso
+            FROM usuarios
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        ).fetchone()
+
+
+    return registro
+
+
+def obter_usuario_por_login(
+    login
+):
+
+    login = (
+        str(
+            login
+            or ""
+        )
+        .strip()
+    )
+
+
+    if not login:
+
+        return None
+
+
+    with conectar_banco_historico() as conexao:
+
+        registro = conexao.execute(
+            """
+            SELECT
+                id,
+                nome,
+                email,
+                usuario,
+                senha_hash,
+                perfil,
+                ativo,
+                criado_em,
+                atualizado_em,
+                ultimo_acesso
+            FROM usuarios
+            WHERE
+                LOWER(usuario) =
+                    LOWER(?)
+                OR
+                LOWER(email) =
+                    LOWER(?)
+            LIMIT 1
+            """,
+            (
+                login,
+                login
+            )
+        ).fetchone()
+
+
+    return registro
+
+
+def criar_usuario_administrador(
+    nome,
+    email,
+    usuario,
+    senha
+):
+
+    agora = datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+
+    senha_hash = (
+        generate_password_hash(
+            senha
+        )
+    )
+
+
+    with conectar_banco_historico() as conexao:
+
+        cursor = conexao.execute(
+            """
+            INSERT INTO usuarios (
+                nome,
+                email,
+                usuario,
+                senha_hash,
+                perfil,
+                ativo,
+                criado_em,
+                atualizado_em,
+                ultimo_acesso
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                nome,
+                email,
+                usuario,
+                senha_hash,
+                "admin",
+                1,
+                agora,
+                agora,
+                agora
+            )
+        )
+
+
+        conexao.commit()
+
+
+    usuario_id = (
+        cursor.lastrowid
+    )
+
+
+    associar_historico_legado_ao_usuario(
+        usuario_id
+    )
+
+
+    return usuario_id
+
+
+def associar_historico_legado_ao_usuario(
+    usuario_id
+):
+
+    if not usuario_id:
+
+        return
+
+
+    try:
+
+        with conectar_banco_historico() as conexao:
+
+            conexao.execute(
+                """
+                UPDATE historico_transcricoes
+                SET usuario_id = ?
+                WHERE usuario_id IS NULL
+                """,
+                (
+                    int(
+                        usuario_id
+                    ),
+                )
+            )
+
+
+            conexao.commit()
+
+
+    except Exception as erro:
+
+        print()
+        print(
+            "Não foi possível associar "
+            "o histórico legado ao administrador."
+        )
+        print(
+            f"Mensagem: {str(erro)}"
+        )
+        print()
+
+
+def atualizar_ultimo_acesso(
+    usuario_id
+):
+
+    agora = datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+
+    with conectar_banco_historico() as conexao:
+
+        conexao.execute(
+            """
+            UPDATE usuarios
+            SET
+                ultimo_acesso = ?,
+                atualizado_em = ?
+            WHERE id = ?
+            """,
+            (
+                agora,
+                agora,
+                int(
+                    usuario_id
+                )
+            )
+        )
+
+
+        conexao.commit()
+
+
+def obter_iniciais_usuario(
+    nome
+):
+
+    partes = [
+        parte
+        for parte in (
+            str(
+                nome
+                or ""
+            )
+            .strip()
+            .split()
+        )
+        if parte
+    ]
+
+
+    if not partes:
+
+        return "US"
+
+
+    if len(
+        partes
+    ) == 1:
+
+        return (
+            partes[
+                0
+            ][:2]
+            .upper()
+        )
+
+
+    return (
+        partes[
+            0
+        ][0]
+        +
+        partes[
+            -1
+        ][0]
+    ).upper()
+
+
+def serializar_usuario_interface(
+    registro
+):
+
+    if registro is None:
+
+        return None
+
+
+    nome = registro[
+        "nome"
+    ]
+
+
+    return {
+        "id":
+            registro[
+                "id"
+            ],
+
+        "nome":
+            nome,
+
+        "email":
+            registro[
+                "email"
+            ],
+
+        "usuario":
+            registro[
+                "usuario"
+            ],
+
+        "perfil":
+            registro[
+                "perfil"
+            ],
+
+        "ativo":
+            bool(
+                registro[
+                    "ativo"
+                ]
+            ),
+
+        "iniciais":
+            obter_iniciais_usuario(
+                nome
+            )
+    }
+
+
+def usuario_sessao_atual():
+
+    usuario_id = session.get(
+        "usuario_id"
+    )
+
+
+    if not usuario_id:
+
+        return None
+
+
+    registro = obter_usuario_por_id(
+        usuario_id
+    )
+
+
+    if (
+        registro is None
+        or not bool(
+            registro[
+                "ativo"
+            ]
+        )
+    ):
+
+        session.clear()
+
+
+        return None
+
+
+    return registro
+
+
+def login_obrigatorio(
+    funcao
+):
+
+    @wraps(
+        funcao
+    )
+    def wrapper(
+        *args,
+        **kwargs
+    ):
+
+        if (
+            usuario_sessao_atual()
+            is None
+        ):
+
+            return redirect(
+                url_for(
+                    "login"
+                )
+            )
+
+
+        return funcao(
+            *args,
+            **kwargs
+        )
+
+
+    return wrapper
+
+
+def login_api_obrigatorio(
+    funcao
+):
+
+    @wraps(
+        funcao
+    )
+    def wrapper(
+        *args,
+        **kwargs
+    ):
+
+        if (
+            usuario_sessao_atual()
+            is None
+        ):
+
+            return jsonify(
+                {
+                    "sucesso":
+                        False,
+
+                    "autenticacao":
+                        False,
+
+                    "mensagem":
+                        (
+                            "Sua sessão não está ativa. "
+                            "Entre novamente no sistema."
+                        )
+                }
+            ), 401
+
+
+        return funcao(
+            *args,
+            **kwargs
+        )
+
+
+    return wrapper
+
+
+# ============================================================
+# ACESSO ADMINISTRATIVO
+# ============================================================
+
+def admin_api_obrigatorio(
+    funcao
+):
+
+    @wraps(
+        funcao
+    )
+    def wrapper(
+        *args,
+        **kwargs
+    ):
+
+        registro = (
+            usuario_sessao_atual()
+        )
+
+
+        if (
+            registro is None
+        ):
+
+            return jsonify(
+                {
+                    "sucesso":
+                        False,
+
+                    "autenticacao":
+                        False,
+
+                    "mensagem":
+                        (
+                            "Sua sessão não está ativa. "
+                            "Entre novamente no sistema."
+                        )
+                }
+            ), 401
+
+
+        if (
+            registro[
+                "perfil"
+            ]
+            !=
+            "admin"
+        ):
+
+            return jsonify(
+                {
+                    "sucesso":
+                        False,
+
+                    "mensagem":
+                        (
+                            "Apenas administradores podem "
+                            "gerenciar usuários."
+                        )
+                }
+            ), 403
+
+
+        return funcao(
+            *args,
+            **kwargs
+        )
+
+
+    return wrapper
+
+
+# ============================================================
+# CRIAR REGISTRO NO HISTÓRICO
+# ============================================================
+
+def criar_registro_historico(
+    arquivo_original,
+    tamanho_bytes,
+    usuario_id
+):
+
+    try:
+
+        agora = datetime.now().isoformat(
+            timespec="seconds"
+        )
+
+
+        with conectar_banco_historico() as conexao:
+
+            cursor = conexao.execute(
+                """
+                INSERT INTO historico_transcricoes (
+                    arquivo_original,
+                    tamanho_bytes,
+                    status,
+                    tempo_segundos,
+                    transcricao,
+                    arquivo_docx,
+                    erro,
+                    criado_em,
+                    atualizado_em,
+                    usuario_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    arquivo_original,
+                    int(
+                        tamanho_bytes
+                        or 0
+                    ),
+                    "transcrevendo",
+                    0,
+                    None,
+                    None,
+                    None,
+                    agora,
+                    agora,
+                    int(
+                        usuario_id
+                    )
+                )
+            )
+
+
+            conexao.commit()
+
+
+            return cursor.lastrowid
+
+
+    except Exception as erro:
+
+        print()
+        print(
+            "Falha ao criar registro "
+            "no histórico."
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro)}"
+        )
+        print()
+
+
+        return None
+
+
+# ============================================================
+# ATUALIZAR REGISTRO DO HISTÓRICO
+# ============================================================
+
+def atualizar_registro_historico(
+    registro_id,
+    status,
+    tempo_segundos=0,
+    transcricao=None,
+    arquivo_docx=None,
+    erro=None
+):
+
+    if registro_id is None:
+
+        return
+
+
+    try:
+
+        agora = datetime.now().isoformat(
+            timespec="seconds"
+        )
+
+
+        with conectar_banco_historico() as conexao:
+
+            conexao.execute(
+                """
+                UPDATE historico_transcricoes
+                SET
+                    status = ?,
+                    tempo_segundos = ?,
+                    transcricao = ?,
+                    arquivo_docx = ?,
+                    erro = ?,
+                    atualizado_em = ?
+                WHERE id = ?
+                """,
+                (
+                    status,
+                    max(
+                        0,
+                        int(
+                            tempo_segundos
+                            or 0
+                        )
+                    ),
+                    transcricao,
+                    arquivo_docx,
+                    erro,
+                    agora,
+                    int(
+                        registro_id
+                    )
+                )
+            )
+
+
+            conexao.commit()
+
+
+    except Exception as erro_banco:
+
+        print()
+        print(
+            "Falha ao atualizar registro "
+            "do histórico."
+        )
+        print(
+            f"Registro: "
+            f"{registro_id}"
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro_banco)}"
+        )
+        print()
+
+
+# ============================================================
+# LIMPAR HISTÓRICO
+# ============================================================
+
+def existe_historico_em_processamento(
+    usuario_id
+):
+
+    with conectar_banco_historico() as conexao:
+
+        resultado = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM historico_transcricoes
+            WHERE
+                usuario_id = ?
+                AND status IN (
+                    'aguardando',
+                    'transcrevendo',
+                    'cancelando'
+                )
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        ).fetchone()
+
+
+    return (
+        int(
+            resultado[
+                "total"
+            ]
+        )
+        >
+        0
+    )
+
+
+def limpar_historico_persistente(
+    usuario_id
+):
+
+    with conectar_banco_historico() as conexao:
+
+        total = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM historico_transcricoes
+            WHERE usuario_id = ?
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        ).fetchone()
+
+
+        quantidade = int(
+            total[
+                "total"
+            ]
+        )
+
+
+        conexao.execute(
+            """
+            DELETE FROM historico_transcricoes
+            WHERE usuario_id = ?
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        )
+
+
+        conexao.commit()
+
+
+    return quantidade
+
+
+# ============================================================
+# LISTAR HISTÓRICO
+# ============================================================
+
+def listar_historico(
+    usuario_id
+):
+
+    with conectar_banco_historico() as conexao:
+
+        registros = conexao.execute(
+            """
+            SELECT
+                id,
+                arquivo_original,
+                tamanho_bytes,
+                status,
+                tempo_segundos,
+                transcricao,
+                arquivo_docx,
+                erro,
+                criado_em,
+                atualizado_em,
+                usuario_id
+            FROM historico_transcricoes
+            WHERE usuario_id = ?
+            ORDER BY id DESC
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        ).fetchall()
+
+
+    resultado = []
+
+
+    for registro in registros:
+
+        nome_docx = (
+            registro[
+                "arquivo_docx"
+            ]
+        )
+
+
+        download_disponivel = False
+
+
+        if nome_docx:
+
+            caminho_docx = os.path.join(
+                PASTA_TRANSCRICOES,
+                nome_docx
+            )
+
+
+            download_disponivel = (
+                os.path.isfile(
+                    caminho_docx
+                )
+            )
+
+
+        resultado.append(
+            {
+                "id":
+                    registro[
+                        "id"
+                    ],
+
+                "arquivo":
+                    registro[
+                        "arquivo_original"
+                    ],
+
+                "tamanho_bytes":
+                    registro[
+                        "tamanho_bytes"
+                    ],
+
+                "status":
+                    registro[
+                        "status"
+                    ],
+
+                "tempo":
+                    registro[
+                        "tempo_segundos"
+                    ],
+
+                "transcricao":
+                    (
+                        registro[
+                            "transcricao"
+                        ]
+                        or
+                        ""
+                    ),
+
+                "arquivo_docx":
+                    (
+                        nome_docx
+                        if download_disponivel
+                        else None
+                    ),
+
+                "download_disponivel":
+                    download_disponivel,
+
+                "erro":
+                    (
+                        registro[
+                            "erro"
+                        ]
+                        or
+                        ""
+                    ),
+
+                "criado_em":
+                    registro[
+                        "criado_em"
+                    ],
+
+                "atualizado_em":
+                    registro[
+                        "atualizado_em"
+                    ]
+            }
+        )
+
+
+    return resultado
+
+
+# ============================================================
+# ESCOPO DO HISTÓRICO POR USUÁRIO
+# ============================================================
+
+def contar_historico_usuario(
+    usuario_id
+):
+
+    with conectar_banco_historico() as conexao:
+
+        resultado = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM historico_transcricoes
+            WHERE usuario_id = ?
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        ).fetchone()
+
+
+    return int(
+        resultado[
+            "total"
+        ]
+    )
+
+
+def usuario_pode_baixar_docx(
+    usuario_id,
+    nome_arquivo
+):
+
+    with conectar_banco_historico() as conexao:
+
+        registro = conexao.execute(
+            """
+            SELECT id
+            FROM historico_transcricoes
+            WHERE
+                usuario_id = ?
+                AND arquivo_docx = ?
+                AND status = 'concluido'
+            LIMIT 1
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+                nome_arquivo
+            )
+        ).fetchone()
+
+
+    return (
+        registro
+        is not None
+    )
 
 
 # ============================================================
@@ -423,6 +1771,13 @@ EXTENSOES_PERMITIDAS = {
 
 
 # ============================================================
+# VERSÃO DA APLICAÇÃO
+# ============================================================
+
+VERSAO_APLICACAO = "1.2.0"
+
+
+# ============================================================
 # MODELO WHISPER
 # ============================================================
 
@@ -522,6 +1877,10 @@ processamento_lock = (
 tarefa_ativa_id = None
 
 evento_cancelamento_ativo = None
+
+# Usuário proprietário da transcrição atualmente em execução.
+# Isso impede que outra conta cancele uma tarefa que não iniciou.
+tarefa_ativa_usuario_id = None
 
 
 # ============================================================
@@ -2479,11 +3838,13 @@ def criar_documento_word(
 
 def executar_transcricao_worker(
     caminho_arquivo,
-    nome_arquivo
+    nome_arquivo,
+    usuario_id
 ):
 
     global tarefa_ativa_id
     global evento_cancelamento_ativo
+    global tarefa_ativa_usuario_id
 
 
     (
@@ -2512,6 +3873,11 @@ def executar_transcricao_worker(
 
         evento_cancelamento_ativo = (
             evento_cancelamento
+        )
+
+
+        tarefa_ativa_usuario_id = int(
+            usuario_id
         )
 
 
@@ -2671,17 +4037,1564 @@ def executar_transcricao_worker(
 
                 evento_cancelamento_ativo = None
 
+                tarefa_ativa_usuario_id = None
+
+
+# ============================================================
+# ADMINISTRAÇÃO DE USUÁRIOS
+# ============================================================
+
+def listar_usuarios_admin():
+
+    with conectar_banco_historico() as conexao:
+
+        registros = conexao.execute(
+            """
+            SELECT
+                id,
+                nome,
+                email,
+                usuario,
+                perfil,
+                ativo,
+                criado_em,
+                atualizado_em,
+                ultimo_acesso
+            FROM usuarios
+            ORDER BY
+                ativo DESC,
+                LOWER(nome) ASC,
+                id ASC
+            """
+        ).fetchall()
+
+
+    return [
+        {
+            "id":
+                registro[
+                    "id"
+                ],
+
+            "nome":
+                registro[
+                    "nome"
+                ],
+
+            "email":
+                registro[
+                    "email"
+                ],
+
+            "usuario":
+                registro[
+                    "usuario"
+                ],
+
+            "perfil":
+                registro[
+                    "perfil"
+                ],
+
+            "ativo":
+                bool(
+                    registro[
+                        "ativo"
+                    ]
+                ),
+
+            "criado_em":
+                registro[
+                    "criado_em"
+                ],
+
+            "atualizado_em":
+                registro[
+                    "atualizado_em"
+                ],
+
+            "ultimo_acesso":
+                registro[
+                    "ultimo_acesso"
+                ],
+
+            "iniciais":
+                obter_iniciais_usuario(
+                    registro[
+                        "nome"
+                    ]
+                )
+        }
+        for registro
+        in registros
+    ]
+
+
+def contar_administradores_ativos():
+
+    with conectar_banco_historico() as conexao:
+
+        resultado = conexao.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM usuarios
+            WHERE
+                perfil = 'admin'
+                AND ativo = 1
+            """
+        ).fetchone()
+
+
+    return int(
+        resultado[
+            "total"
+        ]
+    )
+
+
+def normalizar_dados_usuario(
+    dados,
+    criando=False
+):
+
+    nome = (
+        str(
+            dados.get(
+                "nome",
+                ""
+            )
+        )
+        .strip()
+    )
+
+
+    email = (
+        str(
+            dados.get(
+                "email",
+                ""
+            )
+        )
+        .strip()
+        .lower()
+    )
+
+
+    usuario = (
+        str(
+            dados.get(
+                "usuario",
+                ""
+            )
+        )
+        .strip()
+    )
+
+
+    perfil = (
+        str(
+            dados.get(
+                "perfil",
+                "usuario"
+            )
+        )
+        .strip()
+        .lower()
+    )
+
+
+    ativo_recebido = dados.get(
+        "ativo",
+        True
+    )
+
+
+    if isinstance(
+        ativo_recebido,
+        str
+    ):
+
+        ativo = (
+            ativo_recebido.strip().lower()
+            in {
+                "1",
+                "true",
+                "sim",
+                "on"
+            }
+        )
+
+    else:
+
+        ativo = bool(
+            ativo_recebido
+        )
+
+
+    senha = str(
+        dados.get(
+            "senha",
+            ""
+        )
+        or
+        ""
+    )
+
+
+    if len(
+        nome
+    ) < 3:
+
+        raise ValueError(
+            "Informe o nome completo do usuário."
+        )
+
+
+    if (
+        "@" not in email
+        or "." not in email.split(
+            "@"
+        )[-1]
+    ):
+
+        raise ValueError(
+            "Informe um e-mail válido."
+        )
+
+
+    if not re.fullmatch(
+        r"[A-Za-z0-9._-]{3,30}",
+        usuario
+    ):
+
+        raise ValueError(
+            (
+                "O usuário deve ter entre 3 e 30 caracteres "
+                "e usar apenas letras, números, ponto, hífen "
+                "ou sublinhado."
+            )
+        )
+
+
+    if perfil not in {
+        "admin",
+        "usuario"
+    }:
+
+        raise ValueError(
+            "Perfil de usuário inválido."
+        )
+
+
+    if (
+        criando
+        and len(
+            senha
+        ) < 8
+    ):
+
+        raise ValueError(
+            "A senha precisa ter pelo menos 8 caracteres."
+        )
+
+
+    if (
+        senha
+        and len(
+            senha
+        ) < 8
+    ):
+
+        raise ValueError(
+            "A nova senha precisa ter pelo menos 8 caracteres."
+        )
+
+
+    return {
+        "nome":
+            nome,
+
+        "email":
+            email,
+
+        "usuario":
+            usuario,
+
+        "perfil":
+            perfil,
+
+        "ativo":
+            ativo,
+
+        "senha":
+            senha
+    }
+
+
+def criar_usuario_admin(
+    dados
+):
+
+    dados = normalizar_dados_usuario(
+        dados,
+        criando=True
+    )
+
+
+    agora = datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+
+    senha_hash = generate_password_hash(
+        dados[
+            "senha"
+        ]
+    )
+
+
+    with conectar_banco_historico() as conexao:
+
+        cursor = conexao.execute(
+            """
+            INSERT INTO usuarios (
+                nome,
+                email,
+                usuario,
+                senha_hash,
+                perfil,
+                ativo,
+                criado_em,
+                atualizado_em,
+                ultimo_acesso
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                dados[
+                    "nome"
+                ],
+                dados[
+                    "email"
+                ],
+                dados[
+                    "usuario"
+                ],
+                senha_hash,
+                dados[
+                    "perfil"
+                ],
+                1
+                if dados[
+                    "ativo"
+                ]
+                else 0,
+                agora,
+                agora,
+                None
+            )
+        )
+
+
+        conexao.commit()
+
+
+    return cursor.lastrowid
+
+
+def atualizar_usuario_admin(
+    usuario_id,
+    dados,
+    usuario_atual_id
+):
+
+    registro = obter_usuario_por_id(
+        usuario_id
+    )
+
+
+    if registro is None:
+
+        raise LookupError(
+            "Usuário não encontrado."
+        )
+
+
+    dados = normalizar_dados_usuario(
+        dados,
+        criando=False
+    )
+
+
+    proprio_usuario = (
+        int(
+            usuario_id
+        )
+        ==
+        int(
+            usuario_atual_id
+        )
+    )
+
+
+    if proprio_usuario:
+
+        if (
+            dados[
+                "perfil"
+            ]
+            !=
+            registro[
+                "perfil"
+            ]
+        ):
+
+            raise PermissionError(
+                "Você não pode alterar o perfil da sua própria conta."
+            )
+
+
+        if (
+            dados[
+                "ativo"
+            ]
+            !=
+            bool(
+                registro[
+                    "ativo"
+                ]
+            )
+        ):
+
+            raise PermissionError(
+                "Você não pode desativar sua própria conta."
+            )
+
+
+    removendo_admin_ativo = (
+        registro[
+            "perfil"
+        ]
+        ==
+        "admin"
+        and bool(
+            registro[
+                "ativo"
+            ]
+        )
+        and (
+            dados[
+                "perfil"
+            ]
+            !=
+            "admin"
+            or not dados[
+                "ativo"
+            ]
+        )
+    )
+
+
+    if (
+        removendo_admin_ativo
+        and contar_administradores_ativos()
+        <=
+        1
+    ):
+
+        raise PermissionError(
+            (
+                "O sistema precisa manter pelo menos "
+                "um Administrador ativo."
+            )
+        )
+
+
+    agora = datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+
+    with conectar_banco_historico() as conexao:
+
+        if dados[
+            "senha"
+        ]:
+
+            conexao.execute(
+                """
+                UPDATE usuarios
+                SET
+                    nome = ?,
+                    email = ?,
+                    usuario = ?,
+                    senha_hash = ?,
+                    perfil = ?,
+                    ativo = ?,
+                    atualizado_em = ?
+                WHERE id = ?
+                """,
+                (
+                    dados[
+                        "nome"
+                    ],
+                    dados[
+                        "email"
+                    ],
+                    dados[
+                        "usuario"
+                    ],
+                    generate_password_hash(
+                        dados[
+                            "senha"
+                        ]
+                    ),
+                    dados[
+                        "perfil"
+                    ],
+                    1
+                    if dados[
+                        "ativo"
+                    ]
+                    else 0,
+                    agora,
+                    int(
+                        usuario_id
+                    )
+                )
+            )
+
+        else:
+
+            conexao.execute(
+                """
+                UPDATE usuarios
+                SET
+                    nome = ?,
+                    email = ?,
+                    usuario = ?,
+                    perfil = ?,
+                    ativo = ?,
+                    atualizado_em = ?
+                WHERE id = ?
+                """,
+                (
+                    dados[
+                        "nome"
+                    ],
+                    dados[
+                        "email"
+                    ],
+                    dados[
+                        "usuario"
+                    ],
+                    dados[
+                        "perfil"
+                    ],
+                    1
+                    if dados[
+                        "ativo"
+                    ]
+                    else 0,
+                    agora,
+                    int(
+                        usuario_id
+                    )
+                )
+            )
+
+
+        conexao.commit()
+
+
+def excluir_usuario_admin(
+    usuario_id,
+    usuario_atual_id
+):
+
+    registro = obter_usuario_por_id(
+        usuario_id
+    )
+
+
+    if registro is None:
+
+        raise LookupError(
+            "Usuário não encontrado."
+        )
+
+
+    if (
+        int(
+            usuario_id
+        )
+        ==
+        int(
+            usuario_atual_id
+        )
+    ):
+
+        raise PermissionError(
+            "Você não pode excluir sua própria conta."
+        )
+
+
+    if (
+        registro[
+            "perfil"
+        ]
+        ==
+        "admin"
+        and bool(
+            registro[
+                "ativo"
+            ]
+        )
+        and contar_administradores_ativos()
+        <=
+        1
+    ):
+
+        raise PermissionError(
+            (
+                "O sistema precisa manter pelo menos "
+                "um Administrador ativo."
+            )
+        )
+
+
+    quantidade_historico = (
+        contar_historico_usuario(
+            usuario_id
+        )
+    )
+
+
+    if (
+        quantidade_historico >
+        0
+    ):
+
+        raise PermissionError(
+            (
+                "Este usuário possui "
+                f"{quantidade_historico} "
+                +
+                (
+                    "registro no histórico. "
+                    if quantidade_historico == 1
+                    else "registros no histórico. "
+                )
+                +
+                "Desative a conta em vez de excluí-la."
+            )
+        )
+
+
+    with conectar_banco_historico() as conexao:
+
+        conexao.execute(
+            """
+            DELETE FROM usuarios
+            WHERE id = ?
+            """,
+            (
+                int(
+                    usuario_id
+                ),
+            )
+        )
+
+
+        conexao.commit()
+
+
+# ============================================================
+# PRIMEIRO ACESSO
+# ============================================================
+
+@app.route(
+    "/primeiro-acesso",
+    methods=[
+        "GET",
+        "POST"
+    ]
+)
+def primeiro_acesso():
+
+    if contar_usuarios() > 0:
+
+        return redirect(
+            url_for(
+                "login"
+            )
+        )
+
+
+    erro = ""
+
+
+    if (
+        request.method ==
+        "POST"
+    ):
+
+        nome = (
+            request.form.get(
+                "nome",
+                ""
+            )
+            .strip()
+        )
+
+
+        email = (
+            request.form.get(
+                "email",
+                ""
+            )
+            .strip()
+        )
+
+
+        usuario = (
+            request.form.get(
+                "usuario",
+                ""
+            )
+            .strip()
+        )
+
+
+        senha = request.form.get(
+            "senha",
+            ""
+        )
+
+
+        confirmar_senha = (
+            request.form.get(
+                "confirmar_senha",
+                ""
+            )
+        )
+
+
+        if len(
+            nome
+        ) < 3:
+
+            erro = (
+                "Informe seu nome completo."
+            )
+
+
+        elif (
+            "@" not in email
+            or "." not in email.split(
+                "@"
+            )[-1]
+        ):
+
+            erro = (
+                "Informe um e-mail válido."
+            )
+
+
+        elif not re.fullmatch(
+            r"[A-Za-z0-9._-]{3,30}",
+            usuario
+        ):
+
+            erro = (
+                "O usuário deve ter entre 3 e 30 caracteres "
+                "e usar apenas letras, números, ponto, hífen "
+                "ou sublinhado."
+            )
+
+
+        elif len(
+            senha
+        ) < 8:
+
+            erro = (
+                "A senha precisa ter pelo menos 8 caracteres."
+            )
+
+
+        elif (
+            senha !=
+            confirmar_senha
+        ):
+
+            erro = (
+                "As senhas informadas não coincidem."
+            )
+
+
+        if not erro:
+
+            try:
+
+                usuario_id = (
+                    criar_usuario_administrador(
+                        nome=
+                            nome,
+
+                        email=
+                            email,
+
+                        usuario=
+                            usuario,
+
+                        senha=
+                            senha
+                    )
+                )
+
+
+                session.clear()
+
+
+                session[
+                    "usuario_id"
+                ] = usuario_id
+
+
+                session.permanent = (
+                    True
+                )
+
+
+                return redirect(
+                    url_for(
+                        "index"
+                    )
+                )
+
+
+            except sqlite3.IntegrityError:
+
+                erro = (
+                    "O usuário ou e-mail informado já está cadastrado."
+                )
+
+
+            except Exception as erro_criacao:
+
+                print()
+                print(
+                    "Erro ao criar administrador:"
+                )
+                print(
+                    str(
+                        erro_criacao
+                    )
+                )
+                print()
+
+
+                erro = (
+                    "Não foi possível criar o administrador."
+                )
+
+
+    return render_template(
+        "login.html",
+        modo=
+            "primeiro_acesso",
+
+        erro=
+            erro,
+
+        versao=
+            VERSAO_APLICACAO
+    )
+
+
+# ============================================================
+# LOGIN
+# ============================================================
+
+@app.route(
+    "/login",
+    methods=[
+        "GET",
+        "POST"
+    ]
+)
+def login():
+
+    if contar_usuarios() == 0:
+
+        return redirect(
+            url_for(
+                "primeiro_acesso"
+            )
+        )
+
+
+    if (
+        usuario_sessao_atual()
+        is not None
+    ):
+
+        return redirect(
+            url_for(
+                "index"
+            )
+        )
+
+
+    erro = ""
+
+
+    if (
+        request.method ==
+        "POST"
+    ):
+
+        login_informado = (
+            request.form.get(
+                "login",
+                ""
+            )
+            .strip()
+        )
+
+
+        senha = request.form.get(
+            "senha",
+            ""
+        )
+
+
+        manter_conectado = (
+            request.form.get(
+                "manter_conectado"
+            )
+            ==
+            "1"
+        )
+
+
+        registro = (
+            obter_usuario_por_login(
+                login_informado
+            )
+        )
+
+
+        credenciais_validas = (
+            registro is not None
+            and bool(
+                registro[
+                    "ativo"
+                ]
+            )
+            and check_password_hash(
+                registro[
+                    "senha_hash"
+                ],
+                senha
+            )
+        )
+
+
+        if (
+            not credenciais_validas
+        ):
+
+            erro = (
+                "Usuário/e-mail ou senha inválidos."
+            )
+
+
+        else:
+
+            session.clear()
+
+
+            session[
+                "usuario_id"
+            ] = registro[
+                "id"
+            ]
+
+
+            session.permanent = (
+                manter_conectado
+            )
+
+
+            atualizar_ultimo_acesso(
+                registro[
+                    "id"
+                ]
+            )
+
+
+            return redirect(
+                url_for(
+                    "index"
+                )
+            )
+
+
+    return render_template(
+        "login.html",
+        modo=
+            "login",
+
+        erro=
+            erro,
+
+        versao=
+            VERSAO_APLICACAO
+    )
+
+
+# ============================================================
+# LOGOUT
+# ============================================================
+
+@app.route(
+    "/logout",
+    methods=["POST"]
+)
+@login_obrigatorio
+def logout():
+
+    session.clear()
+
+
+    return redirect(
+        url_for(
+            "login"
+        )
+    )
+
+
+# ============================================================
+# API — USUÁRIOS
+# ============================================================
+
+@app.route(
+    "/api/usuarios",
+    methods=[
+        "GET",
+        "POST"
+    ]
+)
+@admin_api_obrigatorio
+def usuarios_admin():
+
+    try:
+
+        usuario_atual = (
+            usuario_sessao_atual()
+        )
+
+
+        if (
+            request.method ==
+            "GET"
+        ):
+
+            registros = (
+                listar_usuarios_admin()
+            )
+
+
+            return jsonify(
+                {
+                    "sucesso":
+                        True,
+
+                    "total":
+                        len(
+                            registros
+                        ),
+
+                    "usuario_atual_id":
+                        usuario_atual[
+                            "id"
+                        ],
+
+                    "usuarios":
+                        registros
+                }
+            )
+
+
+        dados = (
+            request.get_json(
+                silent=True
+            )
+            or
+            {}
+        )
+
+
+        usuario_id = (
+            criar_usuario_admin(
+                dados
+            )
+        )
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    True,
+
+                "usuario_id":
+                    usuario_id,
+
+                "mensagem":
+                    "Usuário criado com sucesso."
+            }
+        ), 201
+
+
+    except sqlite3.IntegrityError:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Já existe uma conta com esse "
+                        "usuário ou e-mail."
+                    )
+            }
+        ), 409
+
+
+    except ValueError as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    str(
+                        erro
+                    )
+            }
+        ), 400
+
+
+    except Exception as erro:
+
+        print()
+        print(
+            "ERRO NA ADMINISTRAÇÃO DE USUÁRIOS"
+        )
+        traceback.print_exc()
+        print()
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Não foi possível concluir "
+                        "a operação de usuários."
+                    )
+            }
+        ), 500
+
+
+@app.route(
+    "/api/usuarios/<int:usuario_id>",
+    methods=[
+        "PUT",
+        "DELETE"
+    ]
+)
+@admin_api_obrigatorio
+def usuario_admin_item(
+    usuario_id
+):
+
+    try:
+
+        usuario_atual = (
+            usuario_sessao_atual()
+        )
+
+
+        if (
+            request.method ==
+            "DELETE"
+        ):
+
+            excluir_usuario_admin(
+                usuario_id=
+                    usuario_id,
+
+                usuario_atual_id=
+                    usuario_atual[
+                        "id"
+                    ]
+            )
+
+
+            return jsonify(
+                {
+                    "sucesso":
+                        True,
+
+                    "mensagem":
+                        "Usuário excluído com sucesso."
+                }
+            )
+
+
+        dados = (
+            request.get_json(
+                silent=True
+            )
+            or
+            {}
+        )
+
+
+        atualizar_usuario_admin(
+            usuario_id=
+                usuario_id,
+
+            dados=
+                dados,
+
+            usuario_atual_id=
+                usuario_atual[
+                    "id"
+                ]
+        )
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    True,
+
+                "usuario_atualizado_id":
+                    usuario_id,
+
+                "recarregar":
+                    (
+                        int(
+                            usuario_id
+                        )
+                        ==
+                        int(
+                            usuario_atual[
+                                "id"
+                            ]
+                        )
+                    ),
+
+                "mensagem":
+                    "Usuário atualizado com sucesso."
+            }
+        )
+
+
+    except sqlite3.IntegrityError:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Já existe uma conta com esse "
+                        "usuário ou e-mail."
+                    )
+            }
+        ), 409
+
+
+    except LookupError as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    str(
+                        erro
+                    )
+            }
+        ), 404
+
+
+    except PermissionError as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    str(
+                        erro
+                    )
+            }
+        ), 403
+
+
+    except ValueError as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    str(
+                        erro
+                    )
+            }
+        ), 400
+
+
+    except Exception:
+
+        print()
+        print(
+            "ERRO AO ALTERAR USUÁRIO"
+        )
+        traceback.print_exc()
+        print()
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Não foi possível concluir "
+                        "a alteração do usuário."
+                    )
+            }
+        ), 500
+
+
+# ============================================================
+# API — DIAGNÓSTICO
+# ============================================================
+
+@app.route(
+    "/api/status",
+    methods=["GET"]
+)
+@login_api_obrigatorio
+def api_status():
+
+    usuario = (
+        usuario_sessao_atual()
+    )
+
+
+    return jsonify(
+        {
+            "sucesso":
+                True,
+
+            "api":
+                True,
+
+            "versao":
+                VERSAO_APLICACAO,
+
+            "usuario_id":
+                usuario[
+                    "id"
+                ],
+
+            "perfil":
+                usuario[
+                    "perfil"
+                ]
+        }
+    )
+
 
 # ============================================================
 # ROTA PRINCIPAL
 # ============================================================
 
 @app.route("/")
+@login_obrigatorio
 def index():
 
-    return render_template(
-        "index.html"
+    usuario = (
+        serializar_usuario_interface(
+            usuario_sessao_atual()
+        )
     )
+
+
+    return render_template(
+        "index.html",
+        versao=
+            VERSAO_APLICACAO,
+        usuario=
+            usuario
+    )
+
+
+# ============================================================
+# HISTÓRICO PERSISTENTE
+# ============================================================
+
+@app.route(
+    "/historico",
+    methods=[
+        "GET",
+        "DELETE"
+    ]
+)
+@login_api_obrigatorio
+def historico():
+
+    try:
+
+        usuario_atual = (
+            usuario_sessao_atual()
+        )
+
+
+        usuario_id = (
+            usuario_atual[
+                "id"
+            ]
+        )
+
+
+        if (
+            request.method ==
+            "DELETE"
+        ):
+
+            if (
+                existe_historico_em_processamento(
+                    usuario_id
+                )
+            ):
+
+                return jsonify(
+                    {
+                        "sucesso":
+                            False,
+
+                        "mensagem":
+                            (
+                                "Existe uma transcrição em andamento. "
+                                "Aguarde o processamento terminar "
+                                "antes de limpar o histórico."
+                            )
+                    }
+                ), 409
+
+
+            removidos = (
+                limpar_historico_persistente(
+                    usuario_id
+                )
+            )
+
+
+            return jsonify(
+                {
+                    "sucesso":
+                        True,
+
+                    "removidos":
+                        removidos,
+
+                    "mensagem":
+                        (
+                            "Histórico limpo com sucesso."
+                        )
+                }
+            )
+
+
+        registros = (
+            listar_historico(
+                usuario_id
+            )
+        )
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    True,
+
+                "total":
+                    len(
+                        registros
+                    ),
+
+                "registros":
+                    registros
+            }
+        )
+
+
+    except Exception as erro:
+
+        print()
+        print("!" * 60)
+        print(
+            "ERRO AO CONSULTAR O HISTÓRICO"
+        )
+        print(
+            f"Tipo: "
+            f"{type(erro).__name__}"
+        )
+        print(
+            f"Mensagem: "
+            f"{str(erro)}"
+        )
+        print()
+
+        traceback.print_exc()
+
+        print("!" * 60)
+        print()
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Não foi possível carregar "
+                        "o histórico de transcrições."
+                    ),
+
+                "registros":
+                    []
+            }
+        ), 500
 
 
 # ============================================================
@@ -2692,7 +5605,20 @@ def index():
     "/transcrever",
     methods=["POST"]
 )
+@login_api_obrigatorio
 def transcrever():
+
+    usuario_atual = (
+        usuario_sessao_atual()
+    )
+
+
+    usuario_id = (
+        usuario_atual[
+            "id"
+        ]
+    )
+
 
     with processamento_lock:
 
@@ -2784,6 +5710,13 @@ def transcrever():
                 )
 
 
+                registro_historico_id = None
+
+                inicio_processamento = None
+
+                tamanho_bytes = 0
+
+
                 try:
 
                     print()
@@ -2814,6 +5747,25 @@ def transcrever():
                     )
 
 
+                    tamanho_bytes = os.path.getsize(
+                        caminho_arquivo
+                    )
+
+
+                    registro_historico_id = (
+                        criar_registro_historico(
+                            nome_arquivo,
+                            tamanho_bytes,
+                            usuario_id
+                        )
+                    )
+
+
+                    inicio_processamento = (
+                        time.monotonic()
+                    )
+
+
                     print(
                         "Upload salvo e validado com sucesso."
                     )
@@ -2824,7 +5776,17 @@ def transcrever():
                     resposta_worker = (
                         executar_transcricao_worker(
                             caminho_arquivo,
-                            nome_arquivo
+                            nome_arquivo,
+                            usuario_id
+                        )
+                    )
+
+
+                    tempo_processamento = int(
+                        round(
+                            time.monotonic()
+                            -
+                            inicio_processamento
                         )
                     )
 
@@ -2842,6 +5804,25 @@ def transcrever():
                         print()
 
 
+                        atualizar_registro_historico(
+
+                            registro_id=
+                                registro_historico_id,
+
+                            status=
+                                "cancelado",
+
+                            tempo_segundos=
+                                tempo_processamento,
+
+                            erro=
+                                (
+                                    "Processamento cancelado "
+                                    "pelo usuário."
+                                )
+                        )
+
+
                         resultados.append(
                             {
                                 "sucesso":
@@ -2852,6 +5833,9 @@ def transcrever():
 
                                 "arquivo":
                                     nome_arquivo,
+
+                                "historico_id":
+                                    registro_historico_id,
 
                                 "erro":
                                     "Processamento cancelado pelo usuário."
@@ -2956,6 +5940,28 @@ def transcrever():
                     )
 
 
+                    atualizar_registro_historico(
+
+                        registro_id=
+                            registro_historico_id,
+
+                        status=
+                            "concluido",
+
+                        tempo_segundos=
+                            tempo_processamento,
+
+                        transcricao=
+                            texto_tratado,
+
+                        arquivo_docx=
+                            nome_docx,
+
+                        erro=
+                            None
+                    )
+
+
                     print()
                     print("=" * 60)
                     print(
@@ -2980,6 +5986,9 @@ def transcrever():
 
                             "arquivo":
                                 nome_arquivo,
+
+                            "historico_id":
+                                registro_historico_id,
 
                             "arquivo_docx":
                                 nome_docx,
@@ -3021,6 +6030,39 @@ def transcrever():
                     )
 
 
+                    tempo_processamento = 0
+
+
+                    if (
+                        inicio_processamento
+                        is not None
+                    ):
+
+                        tempo_processamento = int(
+                            round(
+                                time.monotonic()
+                                -
+                                inicio_processamento
+                            )
+                        )
+
+
+                    atualizar_registro_historico(
+
+                        registro_id=
+                            registro_historico_id,
+
+                        status=
+                            "erro",
+
+                        tempo_segundos=
+                            tempo_processamento,
+
+                        erro=
+                            mensagem_amigavel
+                    )
+
+
                     resultados.append(
                         {
                             "sucesso":
@@ -3031,6 +6073,9 @@ def transcrever():
 
                             "arquivo":
                                 nome_arquivo,
+
+                            "historico_id":
+                                registro_historico_id,
 
                             "erro":
                                 mensagem_amigavel,
@@ -3112,20 +6157,42 @@ def transcrever():
 
 # ============================================================
 # CANCELAMENTO
+#
+# Segurança multiusuário:
+# somente a mesma conta que iniciou a transcrição ativa pode
+# solicitar o cancelamento.
 # ============================================================
 
 @app.route(
     "/cancelar",
     methods=["POST"]
 )
+@login_api_obrigatorio
 def cancelar():
 
     global tarefa_ativa_id
     global evento_cancelamento_ativo
+    global tarefa_ativa_usuario_id
 
 
     try:
 
+        usuario_atual = (
+            usuario_sessao_atual()
+        )
+
+
+        usuario_atual_id = int(
+            usuario_atual[
+                "id"
+            ]
+        )
+
+
+        # A leitura da tarefa, a validação do proprietário e a
+        # sinalização do cancelamento acontecem sob o mesmo lock.
+        # Assim evitamos que o estado da tarefa mude no meio da
+        # verificação.
         with estado_lock:
 
             tarefa_id = (
@@ -3138,23 +6205,80 @@ def cancelar():
             )
 
 
-        if (
-            tarefa_id is None
-            or evento is None
-        ):
-
-            return jsonify(
-                {
-                    "sucesso":
-                        True,
-
-                    "cancelado":
-                        False,
-
-                    "mensagem":
-                        "Não existe uma transcrição ativa."
-                }
+            usuario_tarefa_id = (
+                tarefa_ativa_usuario_id
             )
+
+
+            if (
+                tarefa_id is None
+                or evento is None
+            ):
+
+                return jsonify(
+                    {
+                        "sucesso":
+                            True,
+
+                        "cancelado":
+                            False,
+
+                        "mensagem":
+                            "Não existe uma transcrição ativa."
+                    }
+                )
+
+
+            if (
+                usuario_tarefa_id
+                is None
+            ):
+
+                return jsonify(
+                    {
+                        "sucesso":
+                            False,
+
+                        "cancelado":
+                            False,
+
+                        "mensagem":
+                            (
+                                "Não foi possível identificar "
+                                "o proprietário da transcrição ativa."
+                            )
+                    }
+                ), 409
+
+
+            if (
+                int(
+                    usuario_tarefa_id
+                )
+                !=
+                usuario_atual_id
+            ):
+
+                return jsonify(
+                    {
+                        "sucesso":
+                            False,
+
+                        "cancelado":
+                            False,
+
+                        "mensagem":
+                            (
+                                "Você não pode cancelar uma transcrição "
+                                "iniciada por outra conta."
+                            )
+                    }
+                ), 403
+
+
+            # Marca a tarefa correta como cancelada antes de
+            # liberar o lock.
+            evento.set()
 
 
         print()
@@ -3166,13 +6290,16 @@ def cancelar():
             f"Tarefa: "
             f"{tarefa_id}"
         )
+        print(
+            f"Usuário: "
+            f"{usuario_atual_id}"
+        )
         print("!" * 60)
         print()
 
 
-        evento.set()
-
-
+        # O worker precisa ser reiniciado porque o Whisper
+        # executa de forma bloqueante durante a transcrição.
         reiniciar_worker()
 
 
@@ -3241,6 +6368,210 @@ def cancelar():
         ), 500
 
 
+
+# ============================================================
+# DIAGNÓSTICO DO SISTEMA
+# ============================================================
+
+def verificar_banco_historico():
+
+    try:
+
+        with conectar_banco_historico() as conexao:
+
+            conexao.execute(
+                "SELECT 1"
+            ).fetchone()
+
+
+        return True
+
+
+    except Exception:
+
+        return False
+
+
+@app.route(
+    "/sistema",
+    methods=["GET"]
+)
+@login_api_obrigatorio
+def sistema():
+
+    try:
+
+        whisper_ativo = (
+            worker_processo is not None
+            and worker_processo.is_alive()
+        )
+
+
+        ffmpeg_ativo = bool(
+            CAMINHO_FFMPEG
+            and os.path.isfile(
+                CAMINHO_FFMPEG
+            )
+        )
+
+
+        historico_ativo = (
+            verificar_banco_historico()
+        )
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    True,
+
+                "versao":
+                    VERSAO_APLICACAO,
+
+                "whisper_ativo":
+                    whisper_ativo,
+
+                "ffmpeg_ativo":
+                    ffmpeg_ativo,
+
+                "historico_ativo":
+                    historico_ativo,
+
+                "modelo":
+                    MODELO_WHISPER,
+
+                "idioma":
+                    "Português (pt)",
+
+                "dispositivo":
+                    "CPU",
+
+                "processamento":
+                    "Local • Sequencial",
+
+                "modo_execucao":
+                    (
+                        "Executável Windows"
+                        if MODO_EXECUTAVEL
+                        else
+                        "Python"
+                    ),
+
+                "pasta_transcricoes":
+                    PASTA_TRANSCRICOES,
+
+                "caminho_banco":
+                    CAMINHO_BANCO_HISTORICO,
+
+                "caminho_ffmpeg":
+                    (
+                        CAMINHO_FFMPEG
+                        or
+                        ""
+                    )
+            }
+        )
+
+
+    except Exception as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Não foi possível obter "
+                        "o diagnóstico do sistema."
+                    ),
+
+                "erro":
+                    str(
+                        erro
+                    )
+            }
+        ), 500
+
+
+# ============================================================
+# ABRIR PASTA DE TRANSCRIÇÕES
+# ============================================================
+
+@app.route(
+    "/abrir-pasta-transcricoes",
+    methods=["POST"]
+)
+@login_api_obrigatorio
+def abrir_pasta_transcricoes():
+
+    try:
+
+        os.makedirs(
+            PASTA_TRANSCRICOES,
+            exist_ok=True
+        )
+
+
+        if os.name == "nt":
+
+            os.startfile(
+                PASTA_TRANSCRICOES
+            )
+
+
+        elif sys.platform == "darwin":
+
+            subprocess.Popen(
+                [
+                    "open",
+                    PASTA_TRANSCRICOES
+                ]
+            )
+
+
+        else:
+
+            subprocess.Popen(
+                [
+                    "xdg-open",
+                    PASTA_TRANSCRICOES
+                ]
+            )
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    True,
+
+                "pasta":
+                    PASTA_TRANSCRICOES
+            }
+        )
+
+
+    except Exception as erro:
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Não foi possível abrir "
+                        "a pasta de transcrições."
+                    ),
+
+                "erro":
+                    str(
+                        erro
+                    )
+            }
+        ), 500
+
+
 # ============================================================
 # DOWNLOAD
 # ============================================================
@@ -3248,9 +6579,28 @@ def cancelar():
 @app.route(
     "/download/<path:nome_arquivo>"
 )
+@login_obrigatorio
 def download(
     nome_arquivo
 ):
+
+    usuario_atual = (
+        usuario_sessao_atual()
+    )
+
+
+    if not usuario_pode_baixar_docx(
+        usuario_atual[
+            "id"
+        ],
+        nome_arquivo
+    ):
+
+        return (
+            "Arquivo não encontrado para esta conta.",
+            404
+        )
+
 
     return send_from_directory(
 
@@ -3291,6 +6641,109 @@ def abrir_navegador_aplicacao():
 
 
 # ============================================================
+# ERROS DA API
+# ============================================================
+
+@app.errorhandler(404)
+def tratar_erro_404(
+    erro
+):
+
+    if request.path.startswith(
+        "/api/"
+    ):
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Endpoint da API não encontrado: "
+                        f"{request.path}"
+                    )
+            }
+        ), 404
+
+
+    return (
+        "Página não encontrada.",
+        404
+    )
+
+
+@app.errorhandler(405)
+def tratar_erro_405(
+    erro
+):
+
+    if request.path.startswith(
+        "/api/"
+    ):
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "Método HTTP não permitido para "
+                        f"{request.path}."
+                    )
+            }
+        ), 405
+
+
+    return (
+        "Método não permitido.",
+        405
+    )
+
+
+@app.errorhandler(500)
+def tratar_erro_500(
+    erro
+):
+
+    if request.path.startswith(
+        "/api/"
+    ):
+
+        print()
+        print(
+            "ERRO INTERNO NA API"
+        )
+        print(
+            repr(
+                erro
+            )
+        )
+        print()
+
+
+        return jsonify(
+            {
+                "sucesso":
+                    False,
+
+                "mensagem":
+                    (
+                        "O servidor encontrou um erro interno "
+                        "ao processar a solicitação da API."
+                    )
+            }
+        ), 500
+
+
+    return (
+        "Erro interno do servidor.",
+        500
+    )
+
+
+# ============================================================
 # EXECUTAR
 # ============================================================
 
@@ -3303,6 +6756,10 @@ if __name__ == "__main__":
     print("=" * 60)
     print(
         "Transcrição em Texto"
+    )
+    print(
+        f"Versão: "
+        f"{VERSAO_APLICACAO}"
     )
     print(
         f"Modelo Whisper: "
@@ -3349,6 +6806,12 @@ if __name__ == "__main__":
     )
 
 
+    print(
+        f"Histórico SQLite: "
+        f"{CAMINHO_BANCO_HISTORICO}"
+    )
+
+
     print()
 
 
@@ -3378,6 +6841,9 @@ if __name__ == "__main__":
 
 
     print()
+
+
+    inicializar_banco_historico()
 
 
     limpar_uploads_orfaos()

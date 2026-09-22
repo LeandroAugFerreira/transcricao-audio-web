@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="pt-BR">
 
 <head>
@@ -6,346 +7,3482 @@
     <meta charset="UTF-8">
 
     <meta
+
         name="viewport"
+
         content="width=device-width, initial-scale=1.0"
+
+    >
+
+    <meta
+
+        name="theme-color"
+
+        content="#06172d"
+
     >
 
     <title>
+
         Transcrição em Texto
+
     </title>
 
     <link
+
         rel="stylesheet"
+
         href="{{ url_for('static', filename='css/style.css') }}"
+
     >
 
 </head>
 
-<body>
 
-    <main class="pagina">
 
-        <section class="aplicacao">
+<body
+    data-theme="dark"
+    data-usuario-id="{{ usuario.id }}"
+    data-usuario-perfil="{{ usuario.perfil }}"
+>
 
-            <!-- ================================================= -->
-            <!-- CABEÇALHO -->
-            <!-- ================================================= -->
+    <main class="dashboard">
 
-            <header class="cabecalho-principal">
 
-                <div class="marca">
 
-                    <div class="marca-icone">
-                        🎙️
+        <!-- ====================================================== -->
+
+        <!-- SIDEBAR -->
+
+        <!-- ====================================================== -->
+
+        <aside class="sidebar">
+
+            <div class="sidebar-marca">
+
+                <div class="sidebar-marca-icone">
+
+                    <img
+                        src="{{ url_for('static', filename='img/logo-transcricao.png') }}"
+                        alt="Logo Transcrição em Texto"
+                        class="logo-app-img logo-sidebar-img"
+                    >
+
+                </div>
+
+            </div>
+
+
+
+            <nav
+
+                class="sidebar-menu"
+
+                aria-label="Menu principal"
+
+            >
+
+                <button
+                    type="button"
+                    class="sidebar-item ativo"
+                    data-pagina="inicio"
+                >
+                    <span class="sidebar-item-icone">⌂</span>
+                    <span>Início</span>
+                </button>
+
+
+                <button
+                    type="button"
+                    class="sidebar-item"
+                    data-pagina="transcricoes"
+                >
+                    <span class="sidebar-item-icone">▤</span>
+                    <span>Histórico</span>
+                </button>
+
+
+                <button
+                    type="button"
+                    class="sidebar-item"
+                    data-pagina="fila"
+                >
+                    <span class="sidebar-item-icone">☷</span>
+                    <span>Fila de Processamento</span>
+                </button>
+
+
+                <button
+                    type="button"
+                    class="sidebar-item"
+                    data-pagina="configuracoes"
+                >
+                    <span class="sidebar-item-icone">⚙</span>
+                    <span>Configurações</span>
+                </button>
+
+
+                <button
+                    type="button"
+                    class="sidebar-item"
+                    data-pagina="estatisticas"
+                >
+                    <span class="sidebar-item-icone">▥</span>
+                    <span>Estatísticas</span>
+                </button>
+
+
+                {% if usuario.perfil == 'admin' %}
+
+                    <button
+                        type="button"
+                        class="sidebar-item"
+                        data-pagina="usuarios"
+                    >
+                        <span class="sidebar-item-icone">♙</span>
+                        <span>Usuários</span>
+                    </button>
+
+                {% endif %}
+
+
+                <button
+                    type="button"
+                    class="sidebar-item"
+                    data-pagina="sistema"
+                >
+                    <span class="sidebar-item-icone">◉</span>
+                    <span>Sistema</span>
+                </button>
+
+            </nav>
+
+
+
+            <div class="sidebar-inferior">
+
+                <section
+                    class="sidebar-status-sistema"
+                    aria-label="Status do sistema"
+                >
+
+                    <div class="sidebar-status-cabecalho">
+
+                        <span>STATUS DO SISTEMA</span>
+
+                        <span
+                            id="sidebar-status-geral"
+                            class="sidebar-status-badge"
+                        >
+                            Verificando
+                        </span>
+
                     </div>
 
-                    <div>
 
-                        <h1>
-                            Transcrição em Texto
-                        </h1>
+                    <div class="sidebar-status-lista">
+
+                        <div class="sidebar-status-item">
+
+                            <span
+                                id="sidebar-ponto-whisper"
+                                class="sidebar-status-ponto verificando"
+                            ></span>
+
+                            <span>Whisper</span>
+
+                            <strong id="sidebar-status-whisper">
+                                Verificando...
+                            </strong>
+
+                        </div>
+
+
+                        <div class="sidebar-status-item">
+
+                            <span
+                                id="sidebar-ponto-ffmpeg"
+                                class="sidebar-status-ponto verificando"
+                            ></span>
+
+                            <span>FFmpeg</span>
+
+                            <strong id="sidebar-status-ffmpeg">
+                                Verificando...
+                            </strong>
+
+                        </div>
+
+
+                        <div class="sidebar-status-item">
+
+                            <span
+                                id="sidebar-ponto-historico"
+                                class="sidebar-status-ponto verificando"
+                            ></span>
+
+                            <span>Histórico</span>
+
+                            <strong id="sidebar-status-historico">
+                                Verificando...
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="sidebar-status-rodape">
+
+                        <span id="sidebar-status-modelo">
+                            Whisper small
+                        </span>
+
+                        <span>
+                            Processamento local
+                        </span>
+
+                    </div>
+
+                </section>
+
+
+                <div class="sidebar-rodape sidebar-rodape-simplificado">
+
+                    <span>
+                        Processamento local • Whisper small
+                    </span>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+
+
+
+
+        <!-- ====================================================== -->
+
+        <!-- CONTEÚDO -->
+
+        <!-- ====================================================== -->
+
+        <section class="conteudo">
+
+
+
+            <!-- ================================================== -->
+
+            <!-- CABEÇALHO -->
+
+            <!-- ================================================== -->
+
+            <header class="cabecalho-dashboard">
+
+                <div class="cabecalho-identidade">
+
+                    <div class="cabecalho-textos">
+
+                        <div class="cabecalho-titulo-linha">
+
+                            <h1>
+
+                                Transcrição em Texto
+
+                            </h1>
+
+                            <span class="badge-versao">
+
+                                {{ versao }}
+
+                            </span>
+
+                        </div>
+
+
 
                         <p>
-                            Transforme seus arquivos de áudio e vídeo em texto utilizando Whisper.
+
+                            Inteligência Artificial para transformar áudio e vídeo em texto.
+
                         </p>
 
                     </div>
 
                 </div>
 
-            </header>
 
 
-            <!-- ================================================= -->
-            <!-- UPLOAD -->
-            <!-- ================================================= -->
+                <div class="cabecalho-acoes">
 
-            <section class="upload-area">
+                    <button
 
-                <div class="upload-icon">
-                    ↑
-                </div>
+                        type="button"
 
-                <h2>
-                    Adicione seus arquivos
-                </h2>
+                        id="botao-tema"
 
-                <p class="upload-descricao">
-                    Selecione arquivos individuais, uma pasta completa ou arraste arquivos para esta área.
-                </p>
+                        class="botao-cabecalho botao-tema"
 
-                <p class="upload-descricao">
-                    Formatos aceitos: MP3, MP4, WAV e M4A
-                </p>
+                        aria-label="Tema atual: Escuro. Clique para alternar."
 
+                        title="Tema: Escuro • próximo: Claro"
 
-                <div class="acoes-selecao">
-
-                    <label
-                        for="arquivos"
-                        class="botao-arquivo"
-                    >
-                        Escolher arquivos
-                    </label>
-
-                    <input
-                        type="file"
-                        id="arquivos"
-                        accept=".mp3,.mp4,.wav,.m4a"
-                        multiple
-                        hidden
                     >
 
+                        <span
+                            id="icone-tema"
+                            class="icone-tema"
+                            aria-hidden="true"
+                        >
+                            ☾
+                        </span>
 
-                    <label
-                        for="pasta-arquivos"
-                        class="botao-arquivo"
-                    >
-                        Escolher pasta
-                    </label>
+                    </button>
 
-                    <input
-                        type="file"
-                        id="pasta-arquivos"
-                        accept=".mp3,.mp4,.wav,.m4a"
-                        webkitdirectory
-                        directory
-                        multiple
-                        hidden
-                    >
 
 
                     <button
+
                         type="button"
-                        id="botao-limpar"
-                        class="botao-limpar"
-                        disabled
+
+                        class="botao-cabecalho notificacao"
+
+                        aria-label="Notificações"
+
+                        title="Notificações"
+
                     >
-                        Limpar lista
+
+                        ♧
+
+                        <span class="notificacao-indicador">
+
+                            0
+
+                        </span>
+
                     </button>
 
-                </div>
-
-            </section>
 
 
-            <!-- ================================================= -->
-            <!-- PROGRESSO -->
-            <!-- ================================================= -->
+                    <details class="usuario-menu">
 
-            <section
-                id="painel-progresso"
-                class="painel-progresso"
-            >
+                        <summary class="usuario-card">
 
-                <div class="progresso-superior">
+                            <div class="usuario-avatar">
 
-                    <div>
+                                {{ usuario.iniciais }}
 
-                        <span class="progresso-rotulo">
-                            PROGRESSO DA FILA
-                        </span>
-
-                        <strong
-                            id="progresso-texto"
-                            class="progresso-texto"
-                        >
-                            Aguardando início
-                        </strong>
-
-                    </div>
+                            </div>
 
 
-                    <span
-                        id="progresso-contador"
-                        class="progresso-contador"
-                    >
-                        0 de 0
-                    </span>
 
-                </div>
+                            <div class="usuario-info">
 
+                                <strong>
 
-                <div class="barra-progresso">
+                                    {{ usuario.nome }}
 
-                    <div
-                        id="barra-progresso-preenchimento"
-                        class="barra-progresso-preenchimento"
-                    ></div>
+                                </strong>
 
-                </div>
+                                <span>
 
+                                    {% if usuario.perfil == 'admin' %}
+                                        Administrador
+                                    {% else %}
+                                        Usuário
+                                    {% endif %}
 
-                <div class="progresso-arquivo">
+                                </span>
 
-                    <div class="progresso-arquivo-info">
-
-                        <span class="progresso-arquivo-label">
-                            ARQUIVO ATUAL
-                        </span>
-
-                        <strong id="arquivo-atual">
-                            Nenhum arquivo em processamento
-                        </strong>
-
-                    </div>
+                            </div>
 
 
-                    <strong
-                        id="cronometro-atual"
-                        class="progresso-tempo"
-                    >
-                        00:00
-                    </strong>
 
-                </div>
+                            <span class="usuario-seta">
 
-            </section>
+                                ⌄
+
+                            </span>
+
+                        </summary>
 
 
-            <!-- ================================================= -->
-            <!-- FILA -->
-            <!-- ================================================= -->
+                        <div class="usuario-dropdown">
 
-            <section class="secao-fila">
+                            <div class="usuario-dropdown-identidade">
 
-                <div class="secao-fila-titulo">
+                                <strong>
+                                    {{ usuario.nome }}
+                                </strong>
 
-                    <div>
+                                <span>
+                                    {{ usuario.email }}
+                                </span>
 
-                        <span class="fila-rotulo">
-                            FILA DE PROCESSAMENTO
-                        </span>
+                                <small>
+                                    @{{ usuario.usuario }}
+                                </small>
 
-                        <h2>
-                            Arquivos selecionados
-                        </h2>
-
-                    </div>
+                            </div>
 
 
-                    <span
-                        id="quantidade-fila"
-                        class="quantidade-fila"
-                    >
-                        0 arquivos
-                    </span>
+                            <div class="usuario-dropdown-separador"></div>
+
+
+                            <div class="usuario-dropdown-perfil">
+
+                                <span>Perfil</span>
+
+                                <strong>
+                                    {% if usuario.perfil == 'admin' %}
+                                        Administrador
+                                    {% else %}
+                                        Usuário
+                                    {% endif %}
+                                </strong>
+
+                            </div>
+
+
+                            <form
+                                method="post"
+                                action="{{ url_for('logout') }}"
+                                class="usuario-dropdown-form"
+                            >
+
+                                <button
+                                    type="submit"
+                                    class="usuario-dropdown-sair"
+                                >
+                                    <span aria-hidden="true">↪</span>
+                                    <span>Sair</span>
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    </details>
 
                 </div>
+
+            </header>
+
+
+
+
+
+            <!-- ================================================== -->
+
+            <!-- VIEWS -->
+
+            <!-- ================================================== -->
+
+            <div class="views-dashboard">
+
 
 
                 <!-- ================================================= -->
-                <!-- CABEÇALHO DA LISTA -->
+
+                <!-- INÍCIO -->
+
                 <!-- ================================================= -->
 
-                <div
-                    id="cabecalho-arquivos"
-                    class="cabecalho-arquivos"
+                <section
+
+                    class="view-dashboard view-ativa"
+
+                    data-view="inicio"
+
                 >
 
-                    <span>
-                        NOME
-                    </span>
-
-                    <span>
-                        TAMANHO
-                    </span>
-
-                    <span>
-                        STATUS
-                    </span>
-
-                    <span>
-                        TEMPO
-                    </span>
-
-                    <span>
-                        AÇÃO
-                    </span>
-
-                </div>
+                    <section class="dashboard-superior">
 
 
-                <!-- ================================================= -->
-                <!-- ARQUIVOS -->
-                <!-- ================================================= -->
 
-                <div id="lista-arquivos"></div>
+                        <!-- ========================================= -->
+
+                        <!-- COLUNA PRINCIPAL -->
+
+                        <!-- ========================================= -->
+
+                        <div class="dashboard-coluna-principal">
 
 
-                <!-- ================================================= -->
-                <!-- CONTROLES -->
-                <!-- ================================================= -->
 
-                <div class="barra-controles">
+                            <!-- ===================================== -->
 
-                    <div class="barra-controles-info">
+                            <!-- UPLOAD -->
 
-                        <span class="barra-controles-label">
-                            ESTADO
+                            <!-- ===================================== -->
+
+                            <section class="upload-area">
+                                <div class="upload-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 64 48" role="img" aria-label="Upload">
+                                        <path d="M20.5 40H16C8.8 40 3 34.2 3 27s5.8-13 13-13c1 0 2 .1 2.9.3C21.8 7.8 28.4 3.5 36 3.5c10.7 0 19.4 8.4 20 18.9 3.1 1.9 5 5.2 5 8.8C61 36.6 56.6 41 51.2 41H43" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M32 39V19" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+                                        <path d="M24.5 26.5 32 19l7.5 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+
+                                <h2>
+                                    Arraste e solte arquivos de áudio ou vídeo aqui
+                                </h2>
+
+                                <p class="upload-descricao">
+                                    Suporta MP3, WAV, MP4 e M4A
+                                </p>
+
+                                <div class="upload-conteudo-inferior">
+
+                                    <div class="upload-seletor-central">
+
+                                        <button
+                                            type="button"
+                                            id="botao-selecionar-upload"
+                                            class="botao-selecionar-upload"
+                                            title="Clique para selecionar arquivos. Shift + clique para selecionar uma pasta."
+                                        >
+                                            <span
+                                                class="botao-selecionar-upload-icone"
+                                                aria-hidden="true"
+                                            >
+                                                <svg viewBox="0 0 24 24">
+                                                    <path
+                                                        d="M3.5 6.5h6l2 2h9v9.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2Z"
+                                                        fill="currentColor"
+                                                        opacity="0.95"
+                                                    />
+                                                    <path
+                                                        d="M3.5 8.5h17"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        stroke-width="1.4"
+                                                        opacity="0.55"
+                                                    />
+                                                </svg>
+                                            </span>
+
+                                            <span>
+                                                Selecionar arquivos
+                                            </span>
+                                        </button>
+
+                                        <span class="upload-ajuda">
+                                            ou clique para escolher no seu dispositivo
+                                        </span>
+                                    </div>
+
+
+                                    <div
+                                        class="formatos-suportados"
+                                        aria-label="Formatos suportados"
+                                    >
+                                        <div class="formato-item">
+                                            <span
+                                                class="formato-icone"
+                                                aria-hidden="true"
+                                            >
+                                                ♫
+                                            </span>
+
+                                            <span>
+                                                MP3
+                                            </span>
+                                        </div>
+
+
+                                        <div class="formato-item">
+                                            <span
+                                                class="formato-icone formato-icone-onda"
+                                                aria-hidden="true"
+                                            >
+                                                ≋
+                                            </span>
+
+                                            <span>
+                                                WAV
+                                            </span>
+                                        </div>
+
+
+                                        <div class="formato-item">
+                                            <span
+                                                class="formato-icone"
+                                                aria-hidden="true"
+                                            >
+                                                ▶
+                                            </span>
+
+                                            <span>
+                                                MP4
+                                            </span>
+                                        </div>
+
+
+                                        <div class="formato-item">
+                                            <span
+                                                class="formato-icone"
+                                                aria-hidden="true"
+                                            >
+                                                ◈
+                                            </span>
+
+                                            <span>
+                                                M4A
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                                <input
+                                    type="file"
+                                    id="arquivos"
+                                    accept=".mp3,.mp4,.wav,.m4a"
+                                    multiple
+                                    hidden
+                                >
+
+
+                                <input
+                                    type="file"
+                                    id="pasta-arquivos"
+                                    accept=".mp3,.mp4,.wav,.m4a"
+                                    webkitdirectory
+                                    directory
+                                    multiple
+                                    hidden
+                                >
+
+                            </section>
+
+
+
+
+
+                            <!-- ===================================== -->
+
+                            <!-- FILA RESUMIDA -->
+
+                            <!-- ===================================== -->
+
+                            <section class="secao-fila">
+
+                                <div class="secao-fila-titulo">
+
+                                    <div class="secao-fila-titulo-esquerda">
+
+                                        <span class="fila-icone">
+
+                                            ▣
+
+                                        </span>
+
+
+
+                                        <div>
+
+                                            <span class="fila-rotulo">
+
+                                                FILA DE PROCESSAMENTO
+
+                                            </span>
+
+                                            <h2>
+
+                                                Arquivos selecionados
+
+                                            </h2>
+
+                                        </div>
+
+                                    </div>
+
+
+
+                                    <div class="fila-info-direita">
+                                        <button
+                                            type="button"
+                                            id="botao-limpar"
+                                            class="botao-limpar botao-limpar-fila"
+                                            disabled
+                                        >
+                                            Limpar lista
+                                        </button>
+
+
+                                        <span
+
+                                            id="quantidade-fila"
+
+                                            class="quantidade-fila"
+
+                                        >
+
+                                            0 arquivos
+
+                                        </span>
+
+
+
+                                        <span class="badge-processamento">
+
+                                            ☷ Processamento sequencial
+
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+
+
+                                <div
+
+                                    id="cabecalho-arquivos"
+
+                                    class="cabecalho-arquivos"
+
+                                >
+
+                                    <span>
+
+                                        NOME
+
+                                    </span>
+
+                                    <span>
+
+                                        TAMANHO
+
+                                    </span>
+
+                                    <span>
+
+                                        STATUS
+
+                                    </span>
+
+                                    <span>
+
+                                        TEMPO
+
+                                    </span>
+
+                                    <span>
+
+                                        AÇÃO
+
+                                    </span>
+
+                                </div>
+
+
+
+                                <div
+
+                                    id="lista-arquivos"
+
+                                    class="lista-arquivos"
+
+                                ></div>
+
+
+
+                                <div
+
+                                    id="fila-vazia"
+
+                                    class="fila-vazia"
+
+                                >
+
+                                    <span class="fila-vazia-icone">
+
+                                        ♫
+
+                                    </span>
+
+                                    <strong>
+
+                                        Nenhum arquivo na fila
+
+                                    </strong>
+
+                                    <p>
+
+                                        Adicione arquivos para iniciar uma nova transcrição.
+
+                                    </p>
+
+                                </div>
+
+                            </section>
+
+                        </div>
+
+
+
+
+
+                        <!-- ========================================= -->
+
+                        <!-- COLUNA LATERAL -->
+
+                        <!-- ========================================= -->
+
+                        <aside class="dashboard-coluna-lateral">
+
+
+
+                            <section class="kpis">
+
+                                <div class="kpi-card">
+
+                                    <span
+
+                                        id="kpi-fila"
+
+                                        class="kpi-valor kpi-roxo"
+
+                                    >
+
+                                        0
+
+                                    </span>
+
+                                    <span class="kpi-label">
+
+                                        Arquivos na fila
+
+                                    </span>
+
+                                </div>
+
+
+
+                                <div class="kpi-card">
+
+                                    <span
+
+                                        id="kpi-processando"
+
+                                        class="kpi-valor kpi-azul"
+
+                                    >
+
+                                        0
+
+                                    </span>
+
+                                    <span class="kpi-label">
+
+                                        Processando
+
+                                    </span>
+
+                                </div>
+
+
+
+                                <div class="kpi-card">
+
+                                    <span
+
+                                        id="kpi-concluidos"
+
+                                        class="kpi-valor kpi-verde"
+
+                                    >
+
+                                        0
+
+                                    </span>
+
+                                    <span class="kpi-label">
+
+                                        Concluídos
+
+                                    </span>
+
+                                </div>
+
+
+
+                                <div class="kpi-card kpi-card-circular">
+
+                                    <div class="kpi-circular">
+
+                                        <span
+
+                                            id="kpi-percentual"
+
+                                            class="kpi-circular-valor"
+
+                                        >
+
+                                            0%
+
+                                        </span>
+
+                                    </div>
+
+                                    <span class="kpi-label">
+
+                                        Progresso
+
+                                    </span>
+
+                                </div>
+
+                            </section>
+
+
+
+
+
+                            <!-- ===================================== -->
+
+                            <!-- WHISPER -->
+
+                            <!-- ===================================== -->
+
+                            <section
+                                id="whisper-card"
+                                class="whisper-card whisper-estado-aguardando"
+                            >
+
+                                <div class="whisper-cabecalho">
+
+                                    <div class="whisper-identidade">
+
+                                        <div
+                                            class="whisper-icone whisper-icone-neural"
+                                            aria-hidden="true"
+                                        >
+                                            <svg
+                                                viewBox="0 0 64 64"
+                                                role="img"
+                                                aria-label="Ícone neural"
+                                            >
+                                                <path
+                                                    d="M32 8c-7 0-12 4-14 10-6 1-10 6-10 12 0 5 3 9 7 11 0 8 6 14 14 14h6c8 0 14-6 14-14 4-2 7-6 7-11 0-6-4-11-10-12-2-6-7-10-14-10Z"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="3"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                />
+                                                <path
+                                                    d="M25 20v24M39 20v24M20 27h10M34 27h10M20 37h10M34 37h10M29 16v32M35 16v32"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    opacity="0.82"
+                                                />
+                                            </svg>
+                                        </div>
+
+
+                                        <div>
+
+                                            <h2>
+                                                Whisper AI
+                                            </h2>
+
+                                            <p>
+                                                Reconhecimento de fala com IA de última geração
+                                            </p>
+
+                                        </div>
+
+                                    </div>
+
+
+                                    <span class="whisper-badge">
+
+                                        <span
+                                            class="whisper-badge-ponto"
+                                            aria-hidden="true"
+                                        ></span>
+
+                                        OpenAI Whisper
+
+                                    </span>
+
+                                </div>
+
+
+                                <div class="whisper-visualizador whisper-visualizador-dinamico">
+
+                                    <canvas
+                                        id="whisper-neural-canvas"
+                                        class="whisper-neural-canvas"
+                                        aria-hidden="true"
+                                    ></canvas>
+
+                                    <div
+                                        class="whisper-grade"
+                                        aria-hidden="true"
+                                    ></div>
+
+                                    <div
+                                        class="whisper-brilho whisper-brilho-ciano"
+                                        aria-hidden="true"
+                                    ></div>
+
+                                    <div
+                                        class="whisper-brilho whisper-brilho-roxo"
+                                        aria-hidden="true"
+                                    ></div>
+
+                                </div>
+
+
+                                <div class="whisper-frase">
+
+                                    <span>
+                                        “Do som ao significado.”
+                                    </span>
+
+                                    <span
+                                        id="whisper-status-dinamico"
+                                        class="whisper-status-dinamico"
+                                    >
+                                        PRONTO • SMALL • CPU
+                                    </span>
+
+                                </div>
+
+                            </section>
+
+
+
+
+
+                            <!-- ===================================== -->
+
+                            <!-- TRANSCRIÇÃO -->
+
+                            <!-- ===================================== -->
+
+                            <section class="transcricao-card">
+
+                                <div class="transcricao-card-cabecalho">
+
+                                    <h3>
+
+                                        Transcrição
+
+                                    </h3>
+
+
+
+                                    <div class="transcricao-status">
+
+                                        <span class="status-ponto"></span>
+
+                                        <span id="status-transcricao-painel">
+
+                                            Aguardando...
+
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+
+
+                                <div
+
+                                    id="transcricao-preview"
+
+                                    class="transcricao-preview"
+
+                                >
+
+                                    <span class="transcricao-tempo-preview">
+
+                                        [00:00:00]
+
+                                    </span>
+
+                                    <p>
+
+                                        Adicione um arquivo para iniciar uma nova transcrição.
+
+                                    </p>
+
+                                    <span class="cursor-transcricao"></span>
+
+                                </div>
+
+                            </section>
+
+                        </aside>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- PROGRESSO -->
+
+                    <!-- ============================================= -->
+
+                    <section
+
+                        id="painel-progresso"
+
+                        class="painel-progresso"
+
+                    >
+
+                        <div class="progresso-superior">
+
+                            <div>
+
+                                <span class="progresso-rotulo">
+
+                                    PROGRESSO DA FILA
+
+                                </span>
+
+                                <strong
+
+                                    id="progresso-texto"
+
+                                    class="progresso-texto"
+
+                                >
+
+                                    Aguardando início
+
+                                </strong>
+
+                            </div>
+
+
+
+                            <span
+
+                                id="progresso-contador"
+
+                                class="progresso-contador"
+
+                            >
+
+                                0 de 0
+
+                            </span>
+
+                        </div>
+
+
+
+                        <div class="barra-progresso">
+
+                            <div
+
+                                id="barra-progresso-preenchimento"
+
+                                class="barra-progresso-preenchimento"
+
+                            ></div>
+
+                        </div>
+
+
+
+                        <div class="progresso-arquivo">
+
+                            <div class="progresso-arquivo-info">
+
+                                <span class="progresso-arquivo-label">
+
+                                    ARQUIVO ATUAL
+
+                                </span>
+
+                                <strong id="arquivo-atual">
+
+                                    Nenhum arquivo em processamento
+
+                                </strong>
+
+                            </div>
+
+
+
+                            <strong
+
+                                id="cronometro-atual"
+
+                                class="progresso-tempo"
+
+                            >
+
+                                00:00
+
+                            </strong>
+
+                        </div>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- AÇÕES -->
+
+                    <!-- ============================================= -->
+
+                    <section class="painel-acoes">
+
+                        <button
+
+                            type="button"
+
+                            id="botao-cancelar"
+
+                            class="botao-cancelar"
+
+                            disabled
+
+                        >
+
+                            <span class="botao-icone">
+
+                                ×
+
+                            </span>
+
+                            Cancelar
+
+                        </button>
+
+
+
+                        <button
+
+                            type="button"
+
+                            id="botao-exportar-word"
+
+                            class="botao-exportar-word"
+
+                            disabled
+
+                        >
+
+                            <span class="word-icone">
+
+                                W
+
+                            </span>
+
+                            Exportar para Microsoft Word (.docx)
+
+                            <span>
+
+                                →
+
+                            </span>
+
+                        </button>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- CONTROLES -->
+
+                    <!-- ============================================= -->
+
+                    <section class="barra-controles">
+
+                        <div class="barra-controles-info">
+
+                            <span class="barra-controles-label">
+
+                                ESTADO
+
+                            </span>
+
+                            <strong id="estado-fila">
+
+                                Aguardando arquivos
+
+                            </strong>
+
+                        </div>
+
+
+
+                        <div class="barra-controles-botoes">
+
+                            <button
+
+                                type="button"
+
+                                id="botao-nova-transcricao"
+
+                                class="botao-nova-transcricao"
+
+                                hidden
+
+                            >
+
+                                Nova Transcrição
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                id="botao-transcrever"
+
+                                class="botao-transcrever"
+
+                                disabled
+
+                            >
+
+                                Iniciar Transcrição
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                id="botao-pausar"
+
+                                class="botao-pausar"
+
+                                disabled
+
+                            >
+
+                                Pausar
+
+                            </button>
+
+                        </div>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- CARDS TÉCNICOS -->
+
+                    <!-- ============================================= -->
+
+                    <section class="cards-tecnicos">
+
+                        <article class="card-tecnico">
+
+                            <div class="card-tecnico-icone">
+
+                                ◷
+
+                            </div>
+
+                            <div>
+
+                                <span>
+
+                                    Tempo total
+
+                                </span>
+
+                                <strong id="tempo-total-dashboard">
+
+                                    00:00:00
+
+                                </strong>
+
+                                <small>
+
+                                    na fila atual
+
+                                </small>
+
+                            </div>
+
+                        </article>
+
+
+
+                        <article class="card-tecnico">
+
+                            <div class="card-tecnico-icone">
+
+                                ◉
+
+                            </div>
+
+                            <div>
+
+                                <span>
+
+                                    Espaço total
+
+                                </span>
+
+                                <strong id="espaco-total-dashboard">
+
+                                    0 MB
+
+                                </strong>
+
+                                <small id="arquivos-total-dashboard">
+
+                                    em 0 arquivos
+
+                                </small>
+
+                            </div>
+
+                        </article>
+
+
+
+                        <article class="card-tecnico">
+
+                            <div class="card-tecnico-icone">
+
+                                ◫
+
+                            </div>
+
+                            <div>
+
+                                <span>
+
+                                    Modelo
+
+                                </span>
+
+                                <strong id="modelo-dashboard">
+
+                                    Whisper small
+
+                                </strong>
+
+                                <small>
+
+                                    Português • CPU
+
+                                </small>
+
+                            </div>
+
+                        </article>
+
+
+
+                        <article class="card-tecnico">
+
+                            <div class="card-tecnico-icone">
+
+                                ▣
+
+                            </div>
+
+                            <div>
+
+                                <span>
+
+                                    Dispositivo
+
+                                </span>
+
+                                <strong id="dispositivo-dashboard">
+
+                                    CPU
+
+                                </strong>
+
+                                <small id="aceleracao-dashboard">
+
+                                    Processamento local
+
+                                </small>
+
+                            </div>
+
+                        </article>
+
+                    </section>
+
+
+
+                    <footer class="rodape-dashboard">
+
+                        <span>
+
+                            TRANSFORMANDO CONVERSAS EM OPORTUNIDADES
+
                         </span>
 
-                        <strong id="estado-fila">
-                            Aguardando arquivos
-                        </strong>
+                    </footer>
+
+                </section>
+
+
+
+
+
+                <!-- ================================================= -->
+
+                <!-- TRANSCRIÇÕES -->
+
+                <!-- ================================================= -->
+
+                <section
+
+                    class="view-dashboard pagina-transcricoes"
+
+                    data-view="transcricoes"
+
+                    hidden
+
+                >
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+
+                                HISTÓRICO
+
+                            </span>
+
+                            <h2>
+                            Histórico
+                        </h2>
+
+                            <p>
+
+                                Consulte as transcrições vinculadas à sua conta,
+
+                                seus resultados e documentos gerados.
+
+                            </p>
+
+                        </div>
+
+
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <span class="pagina-escopo-usuario">
+
+                                <span class="pagina-escopo-avatar">
+                                    {{ usuario.iniciais }}
+                                </span>
+
+                                <span>
+                                    {{ usuario.nome }}
+                                </span>
+
+                            </span>
+
+
+                            <span
+
+                                id="historico-total-resumo"
+
+                                class="pagina-interna-contador"
+
+                            >
+
+                                0 registros
+
+                            </span>
+
+
+                            <button
+
+                                type="button"
+
+                                id="botao-limpar-historico"
+
+                                class="botao-limpar-historico"
+
+                                disabled
+
+                                title="Remove os registros salvos do histórico. Os arquivos Word gerados não são apagados."
+
+                            >
+
+                                <svg
+                                    class="botao-limpar-historico-icone"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5M14 11v5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.8"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+
+                                <span>
+                                    Limpar Histórico
+                                </span>
+
+                            </button>
+
+                        </div>
 
                     </div>
 
 
-                    <div class="barra-controles-botoes">
 
-                        <button
-                            type="button"
-                            id="botao-nova-transcricao"
-                            class="botao-nova-transcricao"
+
+
+                    <!-- ============================================= -->
+
+                    <!-- RESUMO -->
+
+                    <!-- ============================================= -->
+
+                    <section class="historico-resumo">
+
+                        <article class="historico-resumo-card">
+
+                            <span class="historico-resumo-label">
+
+                                Total
+
+                            </span>
+
+                            <strong
+
+                                id="historico-total"
+
+                                class="historico-resumo-valor historico-cor-azul"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                registros disponíveis
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="historico-resumo-card">
+
+                            <span class="historico-resumo-label">
+
+                                Concluídos
+
+                            </span>
+
+                            <strong
+
+                                id="historico-concluidos"
+
+                                class="historico-resumo-valor historico-cor-verde"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                transcrições prontas
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="historico-resumo-card">
+
+                            <span class="historico-resumo-label">
+
+                                Processando
+
+                            </span>
+
+                            <strong
+
+                                id="historico-processando"
+
+                                class="historico-resumo-valor historico-cor-roxo"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                arquivos ativos
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="historico-resumo-card">
+
+                            <span class="historico-resumo-label">
+
+                                Erros
+
+                            </span>
+
+                            <strong
+
+                                id="historico-erros"
+
+                                class="historico-resumo-valor historico-cor-vermelho"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                falhas registradas
+
+                            </small>
+
+                        </article>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- BUSCA E FILTROS -->
+
+                    <!-- ============================================= -->
+
+                    <section class="historico-ferramentas">
+
+                        <div class="historico-busca">
+
+                            <span class="historico-busca-icone">
+
+                                ⌕
+
+                            </span>
+
+                            <input
+
+                                type="search"
+
+                                id="busca-transcricoes"
+
+                                placeholder="Buscar por nome do arquivo..."
+
+                                autocomplete="off"
+
+                            >
+
+                        </div>
+
+
+
+                        <div
+
+                            class="historico-filtros"
+
+                            role="group"
+
+                            aria-label="Filtrar transcrições"
+
+                        >
+
+                            <button
+
+                                type="button"
+
+                                class="historico-filtro ativo"
+
+                                data-filtro-historico="todos"
+
+                            >
+
+                                Todos
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                class="historico-filtro"
+
+                                data-filtro-historico="concluido"
+
+                            >
+
+                                Concluídos
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                class="historico-filtro"
+
+                                data-filtro-historico="transcrevendo"
+
+                            >
+
+                                Processando
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                class="historico-filtro"
+
+                                data-filtro-historico="aguardando"
+
+                            >
+
+                                Aguardando
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                class="historico-filtro"
+
+                                data-filtro-historico="erro"
+
+                            >
+
+                                Erros
+
+                            </button>
+
+                        </div>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- LISTA DO HISTÓRICO -->
+
+                    <!-- ============================================= -->
+
+                    <section class="historico-painel">
+
+                        <div class="historico-lista-cabecalho">
+
+                            <span>
+
+                                ARQUIVO
+
+                            </span>
+
+                            <span>
+
+                                TAMANHO
+
+                            </span>
+
+                            <span>
+
+                                STATUS
+
+                            </span>
+
+                            <span>
+
+                                TEMPO
+
+                            </span>
+
+                            <span>
+
+                                AÇÕES
+
+                            </span>
+
+                        </div>
+
+
+
+                        <div
+
+                            id="historico-transcricoes"
+
+                            class="historico-transcricoes"
+
+                        ></div>
+
+
+
+                        <div
+
+                            id="historico-vazio"
+
+                            class="historico-vazio"
+
+                        >
+
+                            <div class="historico-vazio-icone">
+
+                                ▤
+
+                            </div>
+
+                            <strong>
+
+                                Nenhuma transcrição salva
+
+                            </strong>
+
+                            <p>
+
+                                As transcrições processadas neste computador
+
+                                aparecerão aqui automaticamente.
+
+                            </p>
+
+                            <button
+
+                                type="button"
+
+                                id="historico-ir-inicio"
+
+                                class="historico-botao-inicio"
+
+                            >
+
+                                Adicionar arquivos
+
+                            </button>
+
+                        </div>
+
+                    </section>
+
+                </section>
+
+
+
+
+
+                <!-- ================================================= -->
+
+                <!-- FILA DE PROCESSAMENTO -->
+
+                <!-- ================================================= -->
+
+                <section
+
+                    class="view-dashboard pagina-fila-dedicada"
+
+                    data-view="fila"
+
+                    hidden
+
+                >
+
+                    <!-- ============================================= -->
+
+                    <!-- CABEÇALHO -->
+
+                    <!-- ============================================= -->
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+
+                                FILA DE PROCESSAMENTO
+
+                            </span>
+
+                            <h2>
+
+                                Acompanhe a execução atual
+
+                            </h2>
+
+                            <p>
+
+                                Visualize a ordem dos arquivos, acompanhe o arquivo
+
+                                atual e controle a fila sem retornar à tela Início.
+
+                            </p>
+
+                        </div>
+
+
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <span
+
+                                id="fila-dedicada-resumo"
+
+                                class="pagina-interna-contador"
+
+                            >
+
+                                0 arquivos
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- KPIs -->
+
+                    <!-- ============================================= -->
+
+                    <section class="fila-dedicada-kpis">
+
+                        <article class="fila-dedicada-kpi">
+
+                            <span class="fila-dedicada-kpi-label">
+
+                                Total na fila
+
+                            </span>
+
+                            <strong
+
+                                id="fila-dedicada-total"
+
+                                class="fila-dedicada-kpi-valor fila-dedicada-cor-azul"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                arquivos adicionados
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="fila-dedicada-kpi">
+
+                            <span class="fila-dedicada-kpi-label">
+
+                                Aguardando
+
+                            </span>
+
+                            <strong
+
+                                id="fila-dedicada-aguardando"
+
+                                class="fila-dedicada-kpi-valor fila-dedicada-cor-cinza"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                próximos da sequência
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="fila-dedicada-kpi">
+
+                            <span class="fila-dedicada-kpi-label">
+
+                                Processando
+
+                            </span>
+
+                            <strong
+
+                                id="fila-dedicada-processando"
+
+                                class="fila-dedicada-kpi-valor fila-dedicada-cor-roxo"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                arquivo ativo
+
+                            </small>
+
+                        </article>
+
+
+
+                        <article class="fila-dedicada-kpi">
+
+                            <span class="fila-dedicada-kpi-label">
+
+                                Encerrados
+
+                            </span>
+
+                            <strong
+
+                                id="fila-dedicada-encerrados"
+
+                                class="fila-dedicada-kpi-valor fila-dedicada-cor-verde"
+
+                            >
+
+                                0
+
+                            </strong>
+
+                            <small>
+
+                                concluídos, erros ou cancelados
+
+                            </small>
+
+                        </article>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- PROCESSAMENTO ATUAL -->
+
+                    <!-- ============================================= -->
+
+                    <section class="fila-dedicada-atual">
+
+                        <div class="fila-dedicada-atual-cabecalho">
+
+                            <div>
+
+                                <span class="fila-rotulo">
+
+                                    PROCESSAMENTO ATUAL
+
+                                </span>
+
+                                <h3 id="fila-dedicada-arquivo-atual">
+
+                                    Nenhum arquivo em processamento
+
+                                </h3>
+
+                            </div>
+
+
+
+                            <strong
+
+                                id="fila-dedicada-tempo"
+
+                                class="fila-dedicada-tempo"
+
+                            >
+
+                                00:00
+
+                            </strong>
+
+                        </div>
+
+
+
+                        <div class="fila-dedicada-progresso-info">
+
+                            <span id="fila-dedicada-progresso-texto">
+
+                                Aguardando início
+
+                            </span>
+
+                            <span id="fila-dedicada-progresso-contador">
+
+                                0 de 0
+
+                            </span>
+
+                        </div>
+
+
+
+                        <div class="fila-dedicada-barra">
+
+                            <div
+
+                                id="fila-dedicada-barra-preenchimento"
+
+                                class="fila-dedicada-barra-preenchimento"
+
+                            ></div>
+
+                        </div>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- LISTA -->
+
+                    <!-- ============================================= -->
+
+                    <section class="fila-dedicada-painel">
+
+                        <div class="fila-dedicada-titulo">
+
+                            <div>
+
+                                <span class="fila-rotulo">
+
+                                    ORDEM DE PROCESSAMENTO
+
+                                </span>
+
+                                <h3>
+
+                                    Arquivos da fila atual
+
+                                </h3>
+
+                            </div>
+
+
+
+                            <span class="badge-processamento">
+
+                                ☷ Processamento sequencial
+
+                            </span>
+
+                        </div>
+
+
+
+                        <div class="fila-dedicada-cabecalho-lista">
+
+                            <span>
+
+                                ORDEM
+
+                            </span>
+
+                            <span>
+
+                                ARQUIVO
+
+                            </span>
+
+                            <span>
+
+                                TAMANHO
+
+                            </span>
+
+                            <span>
+
+                                STATUS
+
+                            </span>
+
+                            <span>
+
+                                TEMPO
+
+                            </span>
+
+                        </div>
+
+
+
+                        <div
+
+                            id="fila-dedicada-lista"
+
+                            class="fila-dedicada-lista"
+
+                        ></div>
+
+
+
+                        <div
+
+                            id="fila-dedicada-vazia"
+
+                            class="fila-dedicada-vazia"
+
+                        >
+
+                            <span class="fila-dedicada-vazia-icone">
+
+                                ☷
+
+                            </span>
+
+                            <strong>
+
+                                A fila está vazia
+
+                            </strong>
+
+                            <p>
+
+                                Adicione arquivos na tela Início para montar
+
+                                uma nova fila.
+
+                            </p>
+
+                            <button
+
+                                type="button"
+
+                                id="fila-dedicada-ir-inicio"
+
+                                class="historico-botao-inicio"
+
+                            >
+
+                                Adicionar arquivos
+
+                            </button>
+
+                        </div>
+
+                    </section>
+
+
+
+
+
+                    <!-- ============================================= -->
+
+                    <!-- CONTROLES -->
+
+                    <!-- ============================================= -->
+
+                    <section class="fila-dedicada-controles">
+
+                        <div class="fila-dedicada-estado">
+
+                            <span class="barra-controles-label">
+
+                                ESTADO DA FILA
+
+                            </span>
+
+                            <strong id="fila-dedicada-estado">
+
+                                Aguardando arquivos
+
+                            </strong>
+
+                        </div>
+
+
+
+                        <div class="fila-dedicada-botoes">
+
+                            <button
+
+                                type="button"
+
+                                id="fila-dedicada-iniciar"
+
+                                class="botao-transcrever"
+
+                                disabled
+
+                            >
+
+                                Iniciar Transcrição
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                id="fila-dedicada-pausar"
+
+                                class="botao-pausar"
+
+                                disabled
+
+                            >
+
+                                Pausar
+
+                            </button>
+
+
+
+                            <button
+
+                                type="button"
+
+                                id="fila-dedicada-cancelar"
+
+                                class="botao-cancelar fila-dedicada-cancelar"
+
+                                disabled
+
+                            >
+
+                                Cancelar
+
+                            </button>
+
+                        </div>
+
+                    </section>
+
+                </section>
+
+
+
+
+
+                <!-- ================================================= -->
+
+                <!-- CONFIGURAÇÕES -->
+
+                <!-- ================================================= -->
+
+                <section
+                    class="view-dashboard pagina-configuracoes pagina-funcional"
+                    data-view="configuracoes"
+                    hidden
+                >
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+                                CONFIGURAÇÕES
+                            </span>
+
+                            <h2>
+                                Preferências da aplicação
+                            </h2>
+
+                            <p>
+                                Consulte as configurações técnicas atuais e personalize
+                                comportamentos da interface.
+                            </p>
+
+                        </div>
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <span class="pagina-interna-contador">
+                                v{{ versao }}
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <section class="configuracoes-grid">
+
+                        <article class="configuracao-card">
+
+                            <div class="configuracao-card-cabecalho">
+
+                                <span class="configuracao-card-icone">◉</span>
+
+                                <div>
+
+                                    <span class="pagina-interna-rotulo">
+                                        TRANSCRIÇÃO
+                                    </span>
+
+                                    <h3>
+                                        Motor de reconhecimento
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="configuracao-lista">
+
+                                <div class="configuracao-linha">
+                                    <span>Modelo Whisper</span>
+                                    <strong id="config-modelo">small</strong>
+                                </div>
+
+                                <div class="configuracao-linha">
+                                    <span>Idioma</span>
+                                    <strong id="config-idioma">Português (pt)</strong>
+                                </div>
+
+                                <div class="configuracao-linha">
+                                    <span>Processamento</span>
+                                    <strong id="config-processamento">CPU • Local • Sequencial</strong>
+                                </div>
+
+                            </div>
+
+                        </article>
+
+
+                        <article class="configuracao-card">
+
+                            <div class="configuracao-card-cabecalho">
+
+                                <span class="configuracao-card-icone">⚙</span>
+
+                                <div>
+
+                                    <span class="pagina-interna-rotulo">
+                                        COMPORTAMENTO
+                                    </span>
+
+                                    <h3>
+                                        Preferências da interface
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+
+                            <label class="configuracao-toggle">
+
+                                <div>
+                                    <strong>Confirmar antes de cancelar</strong>
+                                    <span>Evita cancelar uma fila por engano.</span>
+                                </div>
+
+                                <input
+                                    type="checkbox"
+                                    id="config-confirmar-cancelamento"
+                                    checked
+                                >
+
+                                <span class="configuracao-toggle-visual"></span>
+
+                            </label>
+
+
+                            <label class="configuracao-toggle">
+
+                                <div>
+                                    <strong>Atualizar Histórico automaticamente</strong>
+                                    <span>
+                                        Recarrega os registros enquanto a tela Histórico estiver aberta.
+                                    </span>
+                                </div>
+
+                                <input
+                                    type="checkbox"
+                                    id="config-atualizar-historico"
+                                    checked
+                                >
+
+                                <span class="configuracao-toggle-visual"></span>
+
+                            </label>
+
+
+                            <button
+                                type="button"
+                                id="config-restaurar-padroes"
+                                class="botao-secundario-funcional"
+                            >
+                                Restaurar padrões
+                            </button>
+
+                        </article>
+
+
+                        <article class="configuracao-card configuracao-card-largo">
+
+                            <div class="configuracao-card-cabecalho">
+
+                                <span class="configuracao-card-icone">▣</span>
+
+                                <div>
+
+                                    <span class="pagina-interna-rotulo">
+                                        ARQUIVOS E DOCUMENTOS
+                                    </span>
+
+                                    <h3>
+                                        Saída da aplicação
+                                    </h3>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="configuracao-saida">
+
+                                <div>
+
+                                    <span>Pasta das transcrições</span>
+
+                                    <strong id="config-pasta-saida">
+                                        Carregando...
+                                    </strong>
+
+                                </div>
+
+                                <button
+                                    type="button"
+                                    id="config-abrir-pasta"
+                                    class="botao-acao-funcional"
+                                >
+                                    Abrir pasta
+                                </button>
+
+                            </div>
+
+
+                            <div class="configuracao-documento">
+
+                                <div>
+                                    <span>Documento</span>
+                                    <strong>Microsoft Word (.docx)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Fonte</span>
+                                    <strong>Arial 11</strong>
+                                </div>
+
+                                <div>
+                                    <span>Espaçamento</span>
+                                    <strong>1,5</strong>
+                                </div>
+
+                                <div>
+                                    <span>Geração</span>
+                                    <strong>Automática</strong>
+                                </div>
+
+                            </div>
+
+                        </article>
+
+                    </section>
+
+                </section>
+
+
+
+
+
+                <!-- ================================================= -->
+
+                <!-- ESTATÍSTICAS -->
+
+                <!-- ================================================= -->
+
+                <section
+                    class="view-dashboard pagina-estatisticas pagina-funcional"
+                    data-view="estatisticas"
+                    hidden
+                >
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+                                ESTATÍSTICAS
+                            </span>
+
+                            <h2>
+                                Visão geral da sua conta
+                            </h2>
+
+                            <p>
+                                Indicadores calculados somente a partir das transcrições
+                                vinculadas ao usuário {{ usuario.nome }}.
+                            </p>
+
+                        </div>
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <span class="pagina-escopo-usuario">
+
+                                <span class="pagina-escopo-avatar">
+                                    {{ usuario.iniciais }}
+                                </span>
+
+                                <span>
+                                    {{ usuario.nome }}
+                                </span>
+
+                            </span>
+
+
+                            <span
+                                id="estat-total-resumo"
+                                class="pagina-interna-contador"
+                            >
+                                0 registros
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <section class="estatisticas-kpis">
+
+                        <article class="estatistica-kpi">
+                            <span class="estatistica-kpi-label">Total registrado</span>
+                            <strong id="estat-total" class="estatistica-kpi-valor estatistica-cor-azul">0</strong>
+                            <small>itens no histórico</small>
+                        </article>
+
+                        <article class="estatistica-kpi">
+                            <span class="estatistica-kpi-label">Concluídos</span>
+                            <strong id="estat-concluidos" class="estatistica-kpi-valor estatistica-cor-verde">0</strong>
+                            <small>documentos finalizados</small>
+                        </article>
+
+                        <article class="estatistica-kpi">
+                            <span class="estatistica-kpi-label">Taxa de conclusão</span>
+                            <strong id="estat-taxa" class="estatistica-kpi-valor estatistica-cor-roxo">0%</strong>
+                            <small>concluídos sobre o total</small>
+                        </article>
+
+                        <article class="estatistica-kpi">
+                            <span class="estatistica-kpi-label">Tempo acumulado</span>
+                            <strong id="estat-tempo-total" class="estatistica-kpi-valor estatistica-cor-ciano">00:00:00</strong>
+                            <small>tempo de processamento</small>
+                        </article>
+
+                    </section>
+
+
+                    <section class="estatisticas-grid">
+
+                        <article class="estatistica-painel">
+
+                            <div class="estatistica-painel-cabecalho">
+
+                                <div>
+                                    <span class="pagina-interna-rotulo">RESULTADOS</span>
+                                    <h3>Distribuição por status</h3>
+                                </div>
+
+                            </div>
+
+                            <div
+                                id="estat-status-lista"
+                                class="estatistica-barras"
+                            ></div>
+
+                        </article>
+
+
+                        <article class="estatistica-painel">
+
+                            <div class="estatistica-painel-cabecalho">
+
+                                <div>
+                                    <span class="pagina-interna-rotulo">FORMATOS</span>
+                                    <h3>Arquivos processados</h3>
+                                </div>
+
+                            </div>
+
+                            <div
+                                id="estat-formatos-lista"
+                                class="estatistica-barras"
+                            ></div>
+
+                        </article>
+
+
+                        <article class="estatistica-painel estatistica-painel-resumo">
+
+                            <div class="estatistica-resumo-item">
+                                <span>Tempo médio</span>
+                                <strong id="estat-tempo-medio">00:00</strong>
+                                <small>por registro</small>
+                            </div>
+
+                            <div class="estatistica-resumo-item">
+                                <span>Volume acumulado</span>
+                                <strong id="estat-volume-total">0 MB</strong>
+                                <small>arquivos registrados</small>
+                            </div>
+
+                            <div class="estatistica-resumo-item">
+                                <span>Última atividade</span>
+                                <strong id="estat-ultima-atividade">—</strong>
+                                <small>registro mais recente</small>
+                            </div>
+
+                        </article>
+
+                    </section>
+
+                </section>
+
+
+
+
+
+                {% if usuario.perfil == 'admin' %}
+
+                <!-- ================================================= -->
+
+                <!-- USUÁRIOS -->
+
+                <!-- ================================================= -->
+
+                <section
+                    class="view-dashboard pagina-usuarios pagina-funcional"
+                    data-view="usuarios"
+                    hidden
+                >
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+                                USUÁRIOS
+                            </span>
+
+                            <h2>
+                                Administração de usuários
+                            </h2>
+
+                            <p>
+                                Crie contas, altere permissões e controle
+                                quem pode acessar a aplicação.
+                            </p>
+
+                        </div>
+
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <span
+                                id="usuarios-total-resumo"
+                                class="pagina-interna-contador"
+                            >
+                                0 usuários
+                            </span>
+
+                            <button
+                                type="button"
+                                id="usuarios-novo"
+                                class="botao-usuario-novo"
+                            >
+                                <span aria-hidden="true">＋</span>
+                                <span>Novo usuário</span>
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <section class="usuarios-painel">
+
+                        <div class="usuarios-toolbar">
+
+                            <label class="usuarios-busca">
+
+                                <span aria-hidden="true">⌕</span>
+
+                                <input
+                                    type="search"
+                                    id="usuarios-busca"
+                                    placeholder="Buscar por nome, e-mail ou usuário..."
+                                    autocomplete="off"
+                                >
+
+                            </label>
+
+
+                            <div class="usuarios-legenda">
+
+                                <span class="usuarios-legenda-item">
+                                    <i class="usuario-status-ponto ativo"></i>
+                                    Ativo
+                                </span>
+
+                                <span class="usuarios-legenda-item">
+                                    <i class="usuario-status-ponto inativo"></i>
+                                    Inativo
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            id="usuarios-feedback"
+                            class="usuarios-feedback"
+                            hidden
+                        ></div>
+
+
+                        <div class="usuarios-tabela-wrap">
+
+                            <table class="usuarios-tabela">
+
+                                <thead>
+
+                                    <tr>
+                                        <th>Usuário</th>
+                                        <th>E-mail</th>
+                                        <th>Perfil</th>
+                                        <th>Status</th>
+                                        <th>Último acesso</th>
+                                        <th class="usuarios-coluna-acoes">
+                                            Ações
+                                        </th>
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="usuarios-lista">
+
+                                    <tr>
+                                        <td
+                                            colspan="6"
+                                            class="usuarios-carregando"
+                                        >
+                                            Carregando usuários...
+                                        </td>
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+
+                        <div
+                            id="usuarios-vazio"
+                            class="usuarios-vazio"
                             hidden
                         >
-                            Nova Transcrição
-                        </button>
+
+                            <span class="usuarios-vazio-icone">
+                                ♙
+                            </span>
+
+                            <strong>
+                                Nenhum usuário encontrado
+                            </strong>
+
+                            <span>
+                                Ajuste a busca ou crie uma nova conta.
+                            </span>
+
+                        </div>
+
+                    </section>
+
+                </section>
 
 
-                        <button
-                            type="button"
-                            id="botao-transcrever"
-                            class="botao-transcrever"
-                            disabled
+                <div
+                    id="usuario-modal"
+                    class="usuario-modal"
+                    hidden
+                    aria-hidden="true"
+                >
+
+                    <div
+                        class="usuario-modal-overlay"
+                        data-fechar-modal-usuario
+                    ></div>
+
+
+                    <section
+                        class="usuario-modal-card"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="usuario-modal-titulo"
+                    >
+
+                        <div class="usuario-modal-cabecalho">
+
+                            <div>
+
+                                <span class="pagina-interna-rotulo">
+                                    GERENCIAMENTO DE ACESSO
+                                </span>
+
+                                <h2 id="usuario-modal-titulo">
+                                    Novo usuário
+                                </h2>
+
+                            </div>
+
+
+                            <button
+                                type="button"
+                                id="usuario-modal-fechar"
+                                class="usuario-modal-fechar"
+                                aria-label="Fechar"
+                                title="Fechar"
+                            >
+                                ×
+                            </button>
+
+                        </div>
+
+
+                        <form
+                            id="usuario-form"
+                            class="usuario-form"
+                            autocomplete="off"
                         >
-                            Iniciar Transcrição
-                        </button>
+
+                            <input
+                                type="hidden"
+                                id="usuario-form-id"
+                            >
 
 
-                        <button
-                            type="button"
-                            id="botao-pausar"
-                            class="botao-pausar"
-                            disabled
-                        >
-                            Pausar
-                        </button>
+                            <div
+                                id="usuario-form-feedback"
+                                class="usuario-form-feedback"
+                                hidden
+                            ></div>
 
 
-                        <button
-                            type="button"
-                            id="botao-cancelar"
-                            class="botao-cancelar"
-                            disabled
-                        >
-                            Cancelar
-                        </button>
+                            <div class="usuario-form-grid">
 
-                    </div>
+                                <label class="usuario-form-campo usuario-form-campo-largo">
+
+                                    <span>Nome completo</span>
+
+                                    <input
+                                        type="text"
+                                        id="usuario-form-nome"
+                                        maxlength="120"
+                                        required
+                                        placeholder="Nome completo"
+                                    >
+
+                                </label>
+
+
+                                <label class="usuario-form-campo">
+
+                                    <span>E-mail</span>
+
+                                    <input
+                                        type="email"
+                                        id="usuario-form-email"
+                                        maxlength="160"
+                                        required
+                                        placeholder="email@exemplo.com"
+                                    >
+
+                                </label>
+
+
+                                <label class="usuario-form-campo">
+
+                                    <span>Usuário</span>
+
+                                    <input
+                                        type="text"
+                                        id="usuario-form-login"
+                                        minlength="3"
+                                        maxlength="30"
+                                        required
+                                        placeholder="usuario"
+                                    >
+
+                                </label>
+
+
+                                <label class="usuario-form-campo">
+
+                                    <span>Perfil</span>
+
+                                    <select id="usuario-form-perfil">
+
+                                        <option value="usuario">
+                                            Usuário
+                                        </option>
+
+                                        <option value="admin">
+                                            Administrador
+                                        </option>
+
+                                    </select>
+
+                                </label>
+
+
+                                <label class="usuario-form-campo">
+
+                                    <span>Status</span>
+
+                                    <select id="usuario-form-ativo">
+
+                                        <option value="1">
+                                            Ativo
+                                        </option>
+
+                                        <option value="0">
+                                            Inativo
+                                        </option>
+
+                                    </select>
+
+                                </label>
+
+
+                                <label class="usuario-form-campo usuario-form-campo-largo">
+
+                                    <span id="usuario-form-senha-label">
+                                        Senha
+                                    </span>
+
+                                    <input
+                                        type="password"
+                                        id="usuario-form-senha"
+                                        minlength="8"
+                                        placeholder="Mínimo de 8 caracteres"
+                                        autocomplete="new-password"
+                                    >
+
+                                    <small id="usuario-form-senha-ajuda">
+                                        A senha é obrigatória para novos usuários.
+                                    </small>
+
+                                </label>
+
+                            </div>
+
+
+                            <div
+                                id="usuario-form-aviso-proprio"
+                                class="usuario-form-aviso"
+                                hidden
+                            >
+                                Você está editando sua própria conta.
+                                Por segurança, seu perfil e status não podem
+                                ser alterados aqui.
+                            </div>
+
+
+                            <div class="usuario-form-acoes">
+
+                                <button
+                                    type="button"
+                                    id="usuario-form-cancelar"
+                                    class="botao-usuario-secundario"
+                                >
+                                    Cancelar
+                                </button>
+
+
+                                <button
+                                    type="submit"
+                                    id="usuario-form-salvar"
+                                    class="botao-usuario-salvar"
+                                >
+                                    Salvar usuário
+                                </button>
+
+                            </div>
+
+                        </form>
+
+                    </section>
 
                 </div>
 
-            </section>
+                {% endif %}
+
+
+
+
+
+                <!-- ================================================= -->
+
+                <!-- SISTEMA -->
+
+                <!-- ================================================= -->
+
+                <section
+                    class="view-dashboard pagina-sistema pagina-funcional"
+                    data-view="sistema"
+                    hidden
+                >
+
+                    <div class="pagina-interna-cabecalho">
+
+                        <div>
+
+                            <span class="pagina-interna-rotulo">
+                                SISTEMA
+                            </span>
+
+                            <h2>
+                                Diagnóstico da aplicação
+                            </h2>
+
+                            <p>
+                                Verifique os componentes necessários para a transcrição
+                                e os caminhos utilizados pela aplicação.
+                            </p>
+
+                        </div>
+
+                        <div class="pagina-interna-cabecalho-acoes">
+
+                            <button
+                                type="button"
+                                id="sistema-atualizar"
+                                class="botao-secundario-funcional"
+                            >
+                                Atualizar diagnóstico
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <section class="sistema-kpis">
+
+                        <article class="sistema-kpi">
+                            <span class="sistema-kpi-label">Whisper</span>
+                            <strong id="sistema-whisper" class="sistema-kpi-valor">Verificando...</strong>
+                            <small>worker de transcrição</small>
+                        </article>
+
+                        <article class="sistema-kpi">
+                            <span class="sistema-kpi-label">FFmpeg</span>
+                            <strong id="sistema-ffmpeg" class="sistema-kpi-valor">Verificando...</strong>
+                            <small>leitura de áudio e vídeo</small>
+                        </article>
+
+                        <article class="sistema-kpi">
+                            <span class="sistema-kpi-label">Histórico</span>
+                            <strong id="sistema-historico" class="sistema-kpi-valor">Verificando...</strong>
+                            <small>banco SQLite local</small>
+                        </article>
+
+                        <article class="sistema-kpi">
+                            <span class="sistema-kpi-label">Aplicação</span>
+                            <strong id="sistema-versao" class="sistema-kpi-valor sistema-kpi-versao">v{{ versao }}</strong>
+                            <small>versão instalada</small>
+                        </article>
+
+                    </section>
+
+
+                    <section class="sistema-painel">
+
+                        <div class="sistema-painel-cabecalho">
+
+                            <div>
+                                <span class="pagina-interna-rotulo">DETALHES TÉCNICOS</span>
+                                <h3>Ambiente atual</h3>
+                            </div>
+
+                        </div>
+
+
+                        <div class="sistema-detalhes">
+
+                            <div class="sistema-detalhe">
+                                <span>Modelo Whisper</span>
+                                <strong id="sistema-modelo">small</strong>
+                            </div>
+
+                            <div class="sistema-detalhe">
+                                <span>Dispositivo</span>
+                                <strong id="sistema-dispositivo">CPU</strong>
+                            </div>
+
+                            <div class="sistema-detalhe">
+                                <span>Modo de execução</span>
+                                <strong id="sistema-modo">—</strong>
+                            </div>
+
+                            <div class="sistema-detalhe">
+                                <span>Processamento</span>
+                                <strong>Local • Sequencial</strong>
+                            </div>
+
+                        </div>
+
+
+                        <div class="sistema-caminhos">
+
+                            <div>
+                                <span>Pasta das transcrições</span>
+                                <strong id="sistema-pasta-transcricoes">Carregando...</strong>
+                            </div>
+
+                            <div>
+                                <span>Histórico SQLite</span>
+                                <strong id="sistema-caminho-banco">Carregando...</strong>
+                            </div>
+
+                            <div>
+                                <span>FFmpeg</span>
+                                <strong id="sistema-caminho-ffmpeg">Carregando...</strong>
+                            </div>
+
+                        </div>
+
+
+                        <div class="sistema-acoes">
+
+                            <button
+                                type="button"
+                                id="sistema-abrir-pasta"
+                                class="botao-acao-funcional"
+                            >
+                                Abrir pasta de transcrições
+                            </button>
+
+                        </div>
+
+                    </section>
+
+                </section>
+
+
+
+                
+            </div>
 
         </section>
 
     </main>
 
 
+
     <script
+
         src="{{ url_for('static', filename='js/script.js') }}"
+
     ></script>
 
 </body>

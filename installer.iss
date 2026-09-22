@@ -1,56 +1,129 @@
 ; ============================================================
 ; INSTALADOR - TRANSCRIÇÃO EM TEXTO
+; Versão 1.2.0
 ; ============================================================
 
+
 #define MyAppName "Transcrição em Texto"
-#define MyAppVersion "1.1.1"
-#define MyAppPublisher "Leandro Augusto Ferreira"
+#define MyAppVersion "1.2.0"
+#define MyAppPublisher "Leandro A. Ferreira"
 #define MyAppExeName "Transcricao em Texto.exe"
+
 
 [Setup]
 
-; Identificador único do aplicativo.
-; NÃO ALTERAR depois que o programa for distribuído.
+; ============================================================
+; IDENTIFICAÇÃO DO APLICATIVO
+; ============================================================
+
+; IMPORTANTE:
+; Este AppId é o mesmo utilizado nas versões anteriores.
+; NÃO ALTERAR nas próximas atualizações.
 AppId={{A8F70173-C63D-4E21-B36D-44BC1288A1F5}
 
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 
-; Pasta onde o programa será instalado
-DefaultDirName={autopf}\Transcrição em Texto
 
-; Nome que aparecerá no Menu Iniciar
+; ============================================================
+; INSTALAÇÃO
+; ============================================================
+
+; Instalação por usuário.
+; Não exige privilégios administrativos em uma instalação normal.
+PrivilegesRequired=lowest
+
+; Pasta padrão:
+;
+; C:\Users\USUARIO\AppData\Local\Programs\TranscricaoEmTexto
+DefaultDirName={localappdata}\Programs\TranscricaoEmTexto
+
+; Nome exibido no Menu Iniciar.
 DefaultGroupName={#MyAppName}
 
-; Permite desinstalação pelo Windows
+; Não exibir página para seleção do grupo do Menu Iniciar.
+DisableProgramGroupPage=yes
+
+
+; ============================================================
+; DESINSTALAÇÃO
+; ============================================================
+
 UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
-; Nome do instalador que será criado
-OutputBaseFilename=TranscricaoEmTexto-Setup
+; Os dados do usuário NÃO são armazenados na pasta de instalação.
+;
+; Portanto, ao desinstalar o programa, permanecem preservados:
+;
+; Documentos\Transcrição em Texto
+;
+; incluindo histórico, usuários e transcrições.
 
-; Pasta onde o instalador final será salvo
+
+; ============================================================
+; ARQUIVO DE SAÍDA
+; ============================================================
+
 OutputDir=installer-output
 
-; Compactação
+OutputBaseFilename=TranscricaoEmTexto-Setup-v1.2.0
+
+
+; ============================================================
+; ÍCONE DO INSTALADOR
+; ============================================================
+
+SetupIconFile=static\img\logo-transcricao.ico
+
+
+; ============================================================
+; INFORMAÇÕES DE VERSÃO DO INSTALADOR
+; ============================================================
+
+VersionInfoVersion=1.2.0.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription=Instalador do {#MyAppName}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
+
+
+; ============================================================
+; COMPACTAÇÃO
+; ============================================================
+
 Compression=lzma2/max
 SolidCompression=yes
 
-; Aparência moderna
+
+; ============================================================
+; INTERFACE
+; ============================================================
+
 WizardStyle=modern
 
-; Arquitetura
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
 
-; O programa precisa do Windows 10 ou superior
+; ============================================================
+; WINDOWS / ARQUITETURA
+; ============================================================
+
+; Aplicativo desenvolvido para Windows 64 bits.
+ArchitecturesAllowed=x64compatible
+
+; Windows 10 ou superior.
 MinVersion=10.0
 
-; Permite ao usuário escolher se quer atalho na área de trabalho
-DisableProgramGroupPage=yes
 
-; Fecha aplicações quando necessário durante atualização
+; ============================================================
+; ATUALIZAÇÃO / APLICAÇÃO EM EXECUÇÃO
+; ============================================================
+
+; Tenta fechar a aplicação caso esteja aberta durante
+; uma instalação/atualização.
 CloseApplications=yes
+
 RestartApplications=no
 
 
@@ -60,8 +133,21 @@ RestartApplications=no
 
 [Files]
 
-; Copia absolutamente tudo que está na pasta do EXE,
-; incluindo _internal, FFmpeg, Torch, Whisper etc.
+; Copia todo o build ONEDIR produzido pelo PyInstaller.
+;
+; Isso inclui:
+;
+; - Transcricao em Texto.exe
+; - _internal
+; - Python
+; - Flask
+; - Whisper
+; - PyTorch
+; - FFmpeg
+; - templates
+; - static
+; - demais dependências
+;
 Source: "dist\Transcricao em Texto\*"; \
     DestDir: "{app}"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
@@ -75,16 +161,21 @@ Source: "dist\Transcricao em Texto\*"; \
 
 ; Menu Iniciar
 Name: "{autoprograms}\{#MyAppName}"; \
-    Filename: "{app}\{#MyAppExeName}"
+    Filename: "{app}\{#MyAppExeName}"; \
+    WorkingDir: "{app}"; \
+    IconFilename: "{app}\{#MyAppExeName}"
+
 
 ; Área de Trabalho
 Name: "{autodesktop}\{#MyAppName}"; \
     Filename: "{app}\{#MyAppExeName}"; \
+    WorkingDir: "{app}"; \
+    IconFilename: "{app}\{#MyAppExeName}"; \
     Tasks: desktopicon
 
 
 ; ============================================================
-; OPÇÕES DO INSTALADOR
+; OPÇÕES
 ; ============================================================
 
 [Tasks]
@@ -96,11 +187,12 @@ Name: "desktopicon"; \
 
 
 ; ============================================================
-; EXECUTAR AO FINAL DA INSTALAÇÃO
+; EXECUTAR APÓS A INSTALAÇÃO
 ; ============================================================
 
 [Run]
 
 Filename: "{app}\{#MyAppExeName}"; \
     Description: "Abrir {#MyAppName}"; \
+    WorkingDir: "{app}"; \
     Flags: nowait postinstall skipifsilent

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="theme-color"
+        content="#04131f"
+    >
+
+    <title>
+        {% if modo == 'primeiro_acesso' %}
+            Primeiro acesso • Transcrição em Texto
+        {% else %}
+            Entrar • Transcrição em Texto
+        {% endif %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/login.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+    <main class="acesso-layout">
+
+        <section class="acesso-visual">
+
+            <div class="acesso-visual-conteudo">
+
+                <img
+                    src="{{ url_for('static', filename='img/logo-transcricao.png') }}"
+                    alt="Logo Transcrição em Texto"
+                    class="acesso-logo"
+                >
+
+                <div class="acesso-marca">
+
+                    <span class="acesso-rotulo">
+                        TRANSCRIÇÃO EM TEXTO
+                    </span>
+
+                    <h1>
+                        Áudio e vídeo.<br>
+                        Transformados em texto.
+                    </h1>
+
+                    <p>
+                        Transcrição com IA, processamento local
+                        e seus arquivos sob seu controle.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="acesso-hud-linha acesso-hud-linha-1"></div>
+            <div class="acesso-hud-linha acesso-hud-linha-2"></div>
+
+        </section>
+
+
+        <section class="acesso-formulario-area">
+
+            <div class="acesso-card">
+
+                <div class="acesso-card-topo">
+
+                    <span class="acesso-versao">
+                        v{{ versao }}
+                    </span>
+
+                    {% if modo == 'primeiro_acesso' %}
+
+                        <span class="acesso-etapa">
+                            CONFIGURAÇÃO INICIAL
+                        </span>
+
+                    {% else %}
+
+                        <span class="acesso-etapa">
+                            ACESSO SEGURO
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+
+                {% if modo == 'primeiro_acesso' %}
+
+                    <div class="acesso-titulo">
+
+                        <span class="acesso-titulo-icone">
+                            ◈
+                        </span>
+
+                        <div>
+
+                            <h2>
+                                Criar administrador
+                            </h2>
+
+                            <p>
+                                Este será o primeiro usuário do sistema
+                                e terá perfil de Administrador.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="acesso-titulo">
+
+                        <span class="acesso-titulo-icone">
+                            ◉
+                        </span>
+
+                        <div>
+
+                            <h2>
+                                Bem-vindo
+                            </h2>
+
+                            <p>
+                                Entre com seu usuário ou e-mail
+                                para acessar o sistema.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+
+                {% if erro %}
+
+                    <div
+                        class="acesso-alerta"
+                        role="alert"
+                    >
+                        <span aria-hidden="true">!</span>
+                        <span>{{ erro }}</span>
+                    </div>
+
+                {% endif %}
+
+
+                {% if modo == 'primeiro_acesso' %}
+
+                    <form
+                        method="post"
+                        action="{{ url_for('primeiro_acesso') }}"
+                        class="acesso-form"
+                        autocomplete="off"
+                    >
+
+                        <label class="acesso-campo">
+
+                            <span>
+                                Nome completo
+                            </span>
+
+                            <input
+                                type="text"
+                                name="nome"
+                                maxlength="120"
+                                autocomplete="name"
+                                required
+                                value="{{ request.form.get('nome', '') }}"
+                                placeholder="Ex.: Leandro A. Ferreira"
+                            >
+
+                        </label>
+
+
+                        <label class="acesso-campo">
+
+                            <span>
+                                E-mail
+                            </span>
+
+                            <input
+                                type="email"
+                                name="email"
+                                maxlength="160"
+                                autocomplete="email"
+                                required
+                                value="{{ request.form.get('email', '') }}"
+                                placeholder="seuemail@exemplo.com"
+                            >
+
+                        </label>
+
+
+                        <label class="acesso-campo">
+
+                            <span>
+                                Usuário
+                            </span>
+
+                            <input
+                                type="text"
+                                name="usuario"
+                                minlength="3"
+                                maxlength="30"
+                                autocomplete="username"
+                                required
+                                value="{{ request.form.get('usuario', '') }}"
+                                placeholder="seu.usuario"
+                            >
+
+                        </label>
+
+
+                        <div class="acesso-grid-senhas">
+
+                            <label class="acesso-campo">
+
+                                <span>
+                                    Senha
+                                </span>
+
+                                <input
+                                    type="password"
+                                    name="senha"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    required
+                                    placeholder="Mínimo de 8 caracteres"
+                                >
+
+                            </label>
+
+
+                            <label class="acesso-campo">
+
+                                <span>
+                                    Confirmar senha
+                                </span>
+
+                                <input
+                                    type="password"
+                                    name="confirmar_senha"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    required
+                                    placeholder="Repita a senha"
+                                >
+
+                            </label>
+
+                        </div>
+
+
+                        <button
+                            type="submit"
+                            class="acesso-botao-principal"
+                        >
+                            Criar administrador e entrar
+                        </button>
+
+                    </form>
+
+                {% else %}
+
+                    <form
+                        method="post"
+                        action="{{ url_for('login') }}"
+                        class="acesso-form"
+                    >
+
+                        <label class="acesso-campo">
+
+                            <span>
+                                Usuário ou e-mail
+                            </span>
+
+                            <input
+                                type="text"
+                                name="login"
+                                autocomplete="username"
+                                required
+                                autofocus
+                                value="{{ request.form.get('login', '') }}"
+                                placeholder="Usuário ou e-mail"
+                            >
+
+                        </label>
+
+
+                        <label class="acesso-campo">
+
+                            <span>
+                                Senha
+                            </span>
+
+                            <input
+                                type="password"
+                                name="senha"
+                                autocomplete="current-password"
+                                required
+                                placeholder="Digite sua senha"
+                            >
+
+                        </label>
+
+
+                        <label class="acesso-check">
+
+                            <input
+                                type="checkbox"
+                                name="manter_conectado"
+                                value="1"
+                            >
+
+                            <span>
+                                Manter conectado neste computador
+                            </span>
+
+                        </label>
+
+
+                        <button
+                            type="submit"
+                            class="acesso-botao-principal"
+                        >
+                            Entrar
+                        </button>
+
+                    </form>
+
+                {% endif %}
+
+
+                <div class="acesso-seguranca">
+
+                    <span class="acesso-seguranca-ponto"></span>
+
+                    <span>
+                        Credenciais armazenadas localmente com senha protegida por hash.
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <footer class="acesso-rodape">
+
+                <span>
+                    Processamento local
+                </span>
+
+                <span>•</span>
+
+                <span>
+                    Whisper small
+                </span>
+
+                <span>•</span>
+
+                <span>
+                    SQLite
+                </span>
+
+            </footer>
+
+        </section>
+
+    </main>
+
+</body>
+
+</html>
