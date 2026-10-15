@@ -24,7 +24,7 @@
 
     <title>
 
-        Transcrição em Texto
+        VoxTexto
 
     </title>
 
@@ -64,7 +64,7 @@
 
                     <img
                         src="{{ url_for('static', filename='img/logo-transcricao.png') }}"
-                        alt="Logo Transcrição em Texto"
+                        alt="Logo VoxTexto"
                         class="logo-app-img logo-sidebar-img"
                     >
 
@@ -289,7 +289,7 @@
 
                             <h1>
 
-                                Transcrição em Texto
+                                VoxTexto
 
                             </h1>
 
@@ -533,7 +533,7 @@
                                 </h2>
 
                                 <p class="upload-descricao">
-                                    Suporta MP3, WAV, MP4 e M4A
+                                    Suporta MP3, WAV, MP4, M4A e OGG
                                 </p>
 
                                 <div class="upload-conteudo-inferior">
@@ -635,6 +635,20 @@
                                                 M4A
                                             </span>
                                         </div>
+
+
+                                        <div class="formato-item">
+                                            <span
+                                                class="formato-icone"
+                                                aria-hidden="true"
+                                            >
+                                                ♫
+                                            </span>
+
+                                            <span>
+                                                OGG
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -642,7 +656,7 @@
                                 <input
                                     type="file"
                                     id="arquivos"
-                                    accept=".mp3,.mp4,.wav,.m4a"
+                                    accept=".mp3,.mp4,.wav,.m4a,.ogg"
                                     multiple
                                     hidden
                                 >
@@ -651,7 +665,7 @@
                                 <input
                                     type="file"
                                     id="pasta-arquivos"
-                                    accept=".mp3,.mp4,.wav,.m4a"
+                                    accept=".mp3,.mp4,.wav,.m4a,.ogg"
                                     webkitdirectory
                                     directory
                                     multiple

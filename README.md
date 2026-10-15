@@ -1,10 +1,18 @@
-🎙️ Transcrição em Texto
+🎙️ VoxTexto
 
-Aplicação web local desenvolvida em Python para transcrição automática de arquivos de áudio e vídeo utilizando o modelo Whisper.
+VoxTexto, anteriormente Transcrição em Texto, é uma aplicação web local desenvolvida em Python para transcrição automática de arquivos de áudio e vídeo utilizando o modelo Whisper.
 
 O projeto possui interface web, fila de processamento, cancelamento imediato, tratamento de erros, geração automática de documentos Microsoft Word e distribuição para Windows por meio de executável e instalador.
 
-Versão atual: v1.1.1
+Versão atual do código: v1.2.1
+
+Atualização v1.2.1
+
+- Suporte a arquivos OGG, incluindo áudio Vorbis e Opus.
+- Seleção de arquivos centralizada, com os formatos compactos abaixo do botão.
+- Reconhecimento de OGG na fila, no histórico e nas estatísticas.
+
+O instalador Windows desta atualização será gerado em uma etapa posterior.
 
 🖥️ Demonstração
 
@@ -28,7 +36,7 @@ Após a conclusão, o texto pode ser visualizado diretamente na aplicação e ex
 
 📌 Sobre o projeto
 
-O Transcrição em Texto foi desenvolvido com o objetivo de transformar arquivos de áudio e vídeo em documentos de texto de forma simples, organizada e automatizada.
+O VoxTexto foi desenvolvido com o objetivo de transformar arquivos de áudio e vídeo em documentos de texto de forma simples, organizada e automatizada.
 
 A aplicação utiliza o Whisper para reconhecimento de fala e um backend desenvolvido com Flask.
 
@@ -124,6 +132,7 @@ MP3
 MP4
 WAV
 M4A
+OGG
 
 📄 Arquivos gerados
 

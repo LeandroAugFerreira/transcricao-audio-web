@@ -1766,7 +1766,8 @@ EXTENSOES_PERMITIDAS = {
     ".mp3",
     ".mp4",
     ".wav",
-    ".m4a"
+    ".m4a",
+    ".ogg"
 }
 
 
@@ -1774,7 +1775,7 @@ EXTENSOES_PERMITIDAS = {
 # VERSÃO DA APLICAÇÃO
 # ============================================================
 
-VERSAO_APLICACAO = "1.2.0"
+VERSAO_APLICACAO = "1.2.1"
 
 
 # ============================================================
@@ -3594,7 +3595,7 @@ def criar_documento_word(
 
     run = (
         paragrafo_cabecalho.add_run(
-            "Transcrição em Texto"
+            "VoxTexto"
         )
     )
 
@@ -3657,7 +3658,7 @@ def criar_documento_word(
 
 
     run = titulo.add_run(
-        "Transcrição em Texto"
+        "VoxTexto"
     )
 
 
@@ -6755,7 +6756,7 @@ if __name__ == "__main__":
     print()
     print("=" * 60)
     print(
-        "Transcrição em Texto"
+        "VoxTexto"
     )
     print(
         f"Versão: "

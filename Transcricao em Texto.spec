@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_all
 
 # ============================================================
 # TRANSCRIÇÃO EM TEXTO
-# Versão 1.2.0
+# Versão 1.2.1
 # Build final para Windows
 # ============================================================
 

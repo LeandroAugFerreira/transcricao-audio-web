@@ -2375,7 +2375,8 @@ const extensoesPermitidas = [
     ".mp3",
     ".mp4",
     ".wav",
-    ".m4a"
+    ".m4a",
+    ".ogg"
 ];
 
 
@@ -3421,6 +3422,14 @@ function obterFormatoArquivo(
     }
 
 
+    if (
+        nome.endsWith(".ogg")
+    ) {
+
+        return "OGG";
+    }
+
+
     return "ARQ";
 }
 
@@ -3441,7 +3450,10 @@ function obterIconeFormato(
             "▶",
 
         M4A:
-            "◈"
+            "◈",
+
+        OGG:
+            "♫"
     };
 
 
@@ -7478,6 +7490,8 @@ function atualizarEstatisticas() {
             MP4:
                 0,
             M4A:
+                0,
+            OGG:
                 0
         };
 
@@ -7745,7 +7759,7 @@ function atualizarInterfaceSistema(
     ) {
 
         sistemaVersao.textContent =
-            `v${dados.versao || "1.2.0"}`;
+            `v${dados.versao || "1.2.1"}`;
     }
 
 

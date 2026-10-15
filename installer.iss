@@ -1,11 +1,11 @@
 ; ============================================================
 ; INSTALADOR - TRANSCRIÇÃO EM TEXTO
-; Versão 1.2.0
+; Versão 1.2.1
 ; ============================================================
 
 
-#define MyAppName "Transcrição em Texto"
-#define MyAppVersion "1.2.0"
+#define MyAppName "VoxTexto"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "Leandro A. Ferreira"
 #define MyAppExeName "Transcricao em Texto.exe"
 
@@ -69,7 +69,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 
 OutputDir=installer-output
 
-OutputBaseFilename=TranscricaoEmTexto-Setup-v1.2.0
+OutputBaseFilename=TranscricaoEmTexto-Setup-v1.2.1
 
 
 ; ============================================================
@@ -83,7 +83,7 @@ SetupIconFile=static\img\logo-transcricao.ico
 ; INFORMAÇÕES DE VERSÃO DO INSTALADOR
 ; ============================================================
 
-VersionInfoVersion=1.2.0.0
+VersionInfoVersion=1.2.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=Instalador do {#MyAppName}
 VersionInfoProductName={#MyAppName}
