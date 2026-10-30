@@ -7759,7 +7759,7 @@ function atualizarInterfaceSistema(
     ) {
 
         sistemaVersao.textContent =
-            `v${dados.versao || "1.2.1"}`;
+            `V${dados.versao || "2.0"}`;
     }
 
 

@@ -5,7 +5,7 @@ on:
 
   push:
     tags:
-      - "v*"
+      - "V*"
 
 
 permissions:
@@ -47,6 +47,14 @@ jobs:
       # ======================================================
       # DEPENDÊNCIAS PYTHON
       # ======================================================
+
+      - name: Validate release version
+        id: release
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests
+          if ($LASTEXITCODE -ne 0) { throw "Falha nos testes da validação de versão." }
+          python scripts/validate_release.py
 
       - name: Upgrade pip
         shell: pwsh
@@ -276,7 +284,10 @@ jobs:
             --noconfirm `
             --clean `
             --onedir `
+            --noconsole `
             --name "Transcricao em Texto" `
+            --icon "static/img/logo-transcricao.ico" `
+            --version-file "version_info.txt" `
             --runtime-hook "rthook_torch_windows.py" `
             --add-data "templates;templates" `
             --add-data "static;static" `
@@ -306,6 +317,11 @@ jobs:
           Write-Host ""
           Write-Host "Executável criado:"
           Get-Item $exe
+
+          $version = (Get-Item $exe).VersionInfo.ProductVersion
+          if ($version -ne "${{ steps.release.outputs.version }}") {
+              throw "Versão inesperada no executável: $version"
+          }
 
 
       # ======================================================
@@ -421,6 +437,7 @@ jobs:
           Start-Process `
             -FilePath ".\innosetup-7.1.0-x64.exe" `
             -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
+            -WindowStyle Hidden `
             -Wait
 
 
@@ -460,7 +477,7 @@ jobs:
         shell: pwsh
         run: |
 
-          $setup = ".\installer-output\TranscricaoEmTexto-Setup.exe"
+          $setup = ".\installer-output\${{ steps.release.outputs.installer }}"
 
 
           if (-not (Test-Path $setup)) {
@@ -474,6 +491,11 @@ jobs:
           Write-Host "Instalador criado:"
 
           Get-Item $setup
+
+          $version = (Get-Item $setup).VersionInfo.ProductVersion
+          if ($version -ne "${{ steps.release.outputs.version }}") {
+              throw "Versão inesperada no instalador: $version"
+          }
 
 
           $hash = Get-FileHash `
@@ -497,7 +519,7 @@ jobs:
 
           name: TranscricaoEmTexto-Windows-Unsigned
 
-          path: installer-output/TranscricaoEmTexto-Setup.exe
+          path: installer-output/${{ steps.release.outputs.installer }}
 
           if-no-files-found: error
 

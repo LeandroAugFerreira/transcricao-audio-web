@@ -4,9 +4,11 @@ VoxTexto, anteriormente Transcrição em Texto, é uma aplicação web local des
 
 O projeto possui interface web, fila de processamento, cancelamento imediato, tratamento de erros, geração automática de documentos Microsoft Word e distribuição para Windows por meio de executável e instalador.
 
-Versão atual do código: v1.2.1
+Versão atual do código: V2.0
 
-Atualização v1.2.1
+Atualização V2.0
+
+A numeração pública foi simplificada: a antiga v1.2.0 passa a ser identificada como V1.0, e a antiga v1.2.1 corresponde à V2.0. As tags e os arquivos históricos existentes continuam identificáveis pela numeração original.
 
 - Suporte a arquivos OGG, incluindo áudio Vorbis e Opus.
 - Seleção de arquivos centralizada, com os formatos compactos abaixo do botão.
@@ -530,11 +532,13 @@ A distribuição Windows pode ser construída automaticamente pelo GitHub Action
 
 .github/workflows/windows-build.yml
 
+Antes do empacotamento, o workflow executa os testes de validação de versão e confere `app.py`, `installer.iss`, `version_info.txt` e, quando houver, a tag da release. O executável e o instalador também têm suas versões conferidas após a geração.
+
 O workflow é executado:
 
 manualmente por workflow_dispatch;
 
-automaticamente quando uma tag v* é enviada ao GitHub.
+automaticamente quando uma tag V* é enviada ao GitHub (por exemplo, V2.0).
 
 Também é possível reproduzir o ambiente localmente.
 
@@ -561,7 +565,7 @@ CUDA: False
 
 Exemplo do comando utilizado no build Windows:
 
-python -m PyInstaller --noconfirm --clean --onedir --name "Transcricao em Texto" --runtime-hook "rthook_torch_windows.py" --add-data "templates;templates" --add-data "static;static" --add-binary "<CAMINHO_FFMPEG>;ffmpeg\bin" --collect-all whisper app.py
+python -m PyInstaller --noconfirm --clean --onedir --noconsole --name "Transcricao em Texto" --icon "static/img/logo-transcricao.ico" --version-file "version_info.txt" --runtime-hook "rthook_torch_windows.py" --add-data "templates;templates" --add-data "static;static" --add-binary "<CAMINHO_FFMPEG>;ffmpeg\bin" --collect-all whisper app.py
 
 O resultado será criado em:
 
@@ -585,7 +589,9 @@ execute o build automatizado do GitHub Actions.
 
 O instalador final possui o nome:
 
-TranscricaoEmTexto-Setup.exe
+TranscricaoEmTexto-Setup-V2.0.exe
+
+O nome acompanha `MyAppVersion` em `installer.iss`. O workflow gera o instalador em `installer-output/` e envia esse mesmo arquivo como artifact. Gerar um artifact do Actions não publica automaticamente uma release: o instalador validado precisa ser anexado à release correspondente antes de atualizar o download do portfólio.
 
 A instalação padrão utiliza:
 

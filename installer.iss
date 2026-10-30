@@ -1,13 +1,17 @@
 ; ============================================================
 ; INSTALADOR - TRANSCRIÇÃO EM TEXTO
-; Versão 1.2.1
+; Versão V2.0
 ; ============================================================
 
 
 #define MyAppName "VoxTexto"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "2.0"
 #define MyAppPublisher "Leandro A. Ferreira"
 #define MyAppExeName "Transcricao em Texto.exe"
+
+#ifndef MyAppBuildDir
+  #define MyAppBuildDir "dist\Transcricao em Texto"
+#endif
 
 
 [Setup]
@@ -23,7 +27,7 @@ AppId={{A8F70173-C63D-4E21-B36D-44BC1288A1F5}
 
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+AppVerName={#MyAppName} V{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 
 
@@ -69,7 +73,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 
 OutputDir=installer-output
 
-OutputBaseFilename=TranscricaoEmTexto-Setup-v1.2.1
+OutputBaseFilename=TranscricaoEmTexto-Setup-V{#MyAppVersion}
 
 
 ; ============================================================
@@ -83,7 +87,7 @@ SetupIconFile=static\img\logo-transcricao.ico
 ; INFORMAÇÕES DE VERSÃO DO INSTALADOR
 ; ============================================================
 
-VersionInfoVersion=1.2.1.0
+VersionInfoVersion={#MyAppVersion}.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=Instalador do {#MyAppName}
 VersionInfoProductName={#MyAppName}
@@ -148,7 +152,7 @@ RestartApplications=no
 ; - static
 ; - demais dependências
 ;
-Source: "dist\Transcricao em Texto\*"; \
+Source: "{#MyAppBuildDir}\*"; \
     DestDir: "{app}"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 
