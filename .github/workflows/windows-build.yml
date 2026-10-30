@@ -318,7 +318,7 @@ jobs:
           Write-Host "Executável criado:"
           Get-Item $exe
 
-          $version = (Get-Item $exe).VersionInfo.ProductVersion
+          $version = (Get-Item $exe).VersionInfo.ProductVersion.Trim()
           if ($version -ne "${{ steps.release.outputs.version }}") {
               throw "Versão inesperada no executável: $version"
           }
@@ -492,7 +492,8 @@ jobs:
 
           Get-Item $setup
 
-          $version = (Get-Item $setup).VersionInfo.ProductVersion
+          # O Inno Setup preenche os recursos de versão com espaços.
+          $version = (Get-Item $setup).VersionInfo.ProductVersion.Trim()
           if ($version -ne "${{ steps.release.outputs.version }}") {
               throw "Versão inesperada no instalador: $version"
           }
