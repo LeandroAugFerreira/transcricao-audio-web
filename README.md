@@ -14,7 +14,7 @@ A numeração pública foi simplificada: a antiga v1.2.0 passa a ser identificad
 - Seleção de arquivos centralizada, com os formatos compactos abaixo do botão.
 - Reconhecimento de OGG na fila, no histórico e nas estatísticas.
 
-O instalador Windows desta atualização será gerado em uma etapa posterior.
+O instalador Windows V2.0 está disponível na [release oficial](https://github.com/LeandroAugFerreira/transcricao-audio-web/releases/tag/V2.0).
 
 🖥️ Demonstração
 
