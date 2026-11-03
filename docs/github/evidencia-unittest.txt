@@ -1,0 +1,8 @@
+test_fixed_output_filename (test_release.ReleaseValidationTests.test_fixed_output_filename) ... ok
+test_matching_release (test_release.ReleaseValidationTests.test_matching_release) ... ok
+test_old_executable_numeric_version (test_release.ReleaseValidationTests.test_old_executable_numeric_version) ... ok
+test_old_executable_string_version (test_release.ReleaseValidationTests.test_old_executable_string_version) ... ok
+test_old_installer_version (test_release.ReleaseValidationTests.test_old_installer_version) ... ok
+test_wrong_tag (test_release.ReleaseValidationTests.test_wrong_tag) ... ok
+Ran 6 tests in 0.902s
+OK
