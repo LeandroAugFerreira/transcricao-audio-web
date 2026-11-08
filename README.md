@@ -116,3 +116,13 @@ A licença MIT original foi preservada em [LICENSE](LICENSE).
 [VoxTexto no portfólio](https://leandroaugferreira.github.io/python.html) · [Portfólio completo](https://leandroaugferreira.github.io/).
 
 Repositório: [LeandroAugFerreira/transcricao-audio-web](https://github.com/LeandroAugFerreira/transcricao-audio-web).
+
+## 16. Estudo técnico para recrutadores — integração Flask, SQLite e Word
+
+- [Auditoria](docs/recrutamento/AUDITORIA.md), [estudo de caso](docs/recrutamento/ESTUDO_DE_CASO.md), [arquitetura Mermaid](docs/recrutamento/ARQUITETURA.md) e [15 perguntas técnicas](docs/recrutamento/ENTREVISTA_TECNICA.md).
+- [Demonstração interativa no navegador](https://leandroaugferreira.github.io/voxtexto-demo.html) dos estados fictícios: conclusão, erro, cancelamento e histórico por duas contas. O tour é **estático**: não faz upload, não usa Whisper/Flask e não gera Word.
+- [Nove novos testes de integração](tests/test_recruiting_flows.py) com Flask, SQLite, controle de acesso, tratamento de falhas, documento Word real gerado de texto sintético e limpeza de arquivos.
+- [GitHub Actions #42535099487](https://github.com/LeandroAugFerreira/transcricao-audio-web/actions/runs/42535099487): **15 testes unittest aprovados** (9 novos + 6 de release) e verificação de versão V2.0.
+- [Evidências e limites](docs/recrutamento/EVIDENCIAS.md) · [roteiro de 3 minutos](docs/recrutamento/ROTEIRO_DEMO.md) · [plano de melhorias](docs/recrutamento/PLANO_DE_MELHORIAS.md).
+
+**Limites:** o worker Whisper/PyTorch foi substituído por respostas de teste: **não** foram medidos acurácia/WER/CER, velocidade, memória, áudio real, cancelamento de inferência ou novo build Windows nesta revisão. A aplicação Flask é local e não deve ser publicada publicamente sem limitar uploads, revisar CSRF/cookies, debug e privacidade/retention.

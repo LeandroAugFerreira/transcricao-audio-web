@@ -15,3 +15,14 @@ Dependências Python não foram instaladas ou adicionadas. Os builds reutilizara
 Não houve instalação completa do backend a partir de ambiente vazio, teste de produção, novo build de EXE ou implantação. Os comandos do README foram conferidos no código, incluindo o preenchimento local de campos secretos deixados vazios nos exemplos. Este documento registra os testes locais; as execuções remotas são consultáveis na página de Actions do repositório.
 
 As evidências estruturadas nesta pasta registram resultados reais. Os originais e os arquivos de lógica da aplicação foram preservados; somente documentação, exemplos sem credenciais e configuração de CI diferem na cópia.
+
+
+---
+
+## Revisão de recrutamento — 08/11/2026
+
+Foi adicionada a suíte [test_recruiting_flows.py](../../tests/test_recruiting_flows.py), com **nove novos testes** de integração sobre uma cópia temporária do app Flask original: sessão/autorização, upload/validação, resultado falso do worker, histórico SQLite, Word real, tratamento de erros/cancelamento e isolamento de duas contas.
+
+[GitHub Actions #42535099487](https://github.com/LeandroAugFerreira/transcricao-audio-web/actions/runs/42535099487) concluiu **15 unittest aprovados** e validação de versão V2.0. Os seis casos pré-existentes testam somente a release. No novo workflow o worker Whisper é substituído por mock, sem PyTorch/FFmpeg, áudio pessoal ou download do modelo; o Word é realmente gerado com python-docx a partir de texto inventado. Nenhum instalador Windows novo foi construído por esse workflow.
+
+O [tour web](https://leandroaugferreira.github.io/voxtexto-demo.html), quando publicado pelo portfólio, é HTML/JavaScript sem upload/API/modelo e não constitui teste de inferência. As limitações e os riscos de upload/sessão estão em [AUDITORIA.md](../recrutamento/AUDITORIA.md) e [EVIDENCIAS.md](../recrutamento/EVIDENCIAS.md).
